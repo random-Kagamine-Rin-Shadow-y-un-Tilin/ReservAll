@@ -25,10 +25,6 @@ export async function fetchWithAuth(url:string, options: RequestInit = {}): Prom
                 headers: {...options.headers, 'x-api-key': API_KEY},
             })
         }
-        if(window.location.pathname !== '/login'){
-            window.location.href = '/login'
-        }
-
         return res
     }
     return res

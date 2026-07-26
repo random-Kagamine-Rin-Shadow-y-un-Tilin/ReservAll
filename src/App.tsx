@@ -1,12 +1,13 @@
-import { LogOutButton } from "./modules/auth/components/LogOutButton"
-import { TestComponent } from "./modules/auth/components/TestComoponent"
+import { Outlet } from "react-router-dom"
 
 export function App() {
   return (
     <>
-      Hola mundo
-      <LogOutButton/>
-      <TestComponent/>
+      <header>Este es un header</header>
+        <main>
+          <Outlet/>
+        </main>
+      <footer>Este es un footer</footer>
     </>
   )
 }

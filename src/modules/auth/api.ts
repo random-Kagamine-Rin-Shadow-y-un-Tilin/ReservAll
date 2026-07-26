@@ -37,11 +37,9 @@ export async function logOut(): Promise<void> {
     await fetchWithAuth(`${API_URL}/auth/logout`, {method: 'POST'})
 }
 
-//This is an example
 export async function getCurrentUser():Promise<User | null> {
     const res = await fetchWithAuth(`${API_URL}/profile/me`)
     if (!res.ok) return null
     const data = await res.json()
-    console.log(data)
     return data
 }

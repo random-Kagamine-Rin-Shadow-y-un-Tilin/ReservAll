@@ -2,7 +2,7 @@ export interface User{
     id: number
     nombre: string
     correo: string
-    rol: 'cliente' | 'negocio'
+    rol: 'cliente' | 'negocio' | string
 }
 
 export interface RegisterPayload{
@@ -10,6 +10,7 @@ export interface RegisterPayload{
     correo: string
     password: string
     confirm_password: string
+    rol : 'cliente' | 'negocio' | string
 }
 
 export interface LoginPayLoad{

@@ -1,36 +1,26 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import type { ReactNode } from "react"
-import { useAuth } from "../modules/auth/hooks/useAuth";
-import { LoginPage } from "../modules/auth/pages/LoginPage";
-import { RegisterPage } from "../modules/auth/pages/RegisterPage";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { App } from '../App'
 
-//Esto es temporal:
-import { LogOutButton } from "../modules/auth/components/LogOutButton";
-import { TestComponent } from "../modules/auth/components/TestComoponent";
+//Import of Routes
+import { authRoutes } from "./routes/auth.routes";
+import { shopRoutes } from "./routes/shop.routes";
 
-function RouteProtect({children, requiredRol}: {children: ReactNode; requiredRol?: 'cliente' | 'negocio'}){
-    const {user, loading} = useAuth()
-
-    if(loading) return <p>cargando...</p>
-    if(!user) return <Navigate to={'/login'} replace/>
-    if (requiredRol && user.rol !== requiredRol) return <Navigate to={"/"} replace/>
-
-    return children
-}
-
-function InicioPage() {
-    return (
-        <>
-        <TestComponent/>
-        <LogOutButton/>
-        </>
-    )
-}
 
 function Test(){
     return(
         <h2>Esta es una prueba</h2>
+    )
+}
+
+function Test2(){
+    return(
+        <h2>Este es el test2</h2>
+    )
+}
+
+function Services(){
+    return(
+        <h2>Servicios</h2>
     )
 }
 
@@ -39,13 +29,17 @@ export function AppRouter(){
         <BrowserRouter>
             <Routes>
                 {/* Routes without Layout */}
-                <Route path="/login" element={<LoginPage/>}/>
-                <Route path="/register" element={<RegisterPage/>}/>
+                {authRoutes}
 
                 {/* Routes with Layout */}
-                <Route element={<App/>}> 
-                    <Route path="/" element={<InicioPage/>} />
+                <Route element={<App/>}>
+                    {shopRoutes}
                     <Route path="/test" element={<Test/>}/>
+                    <Route path="/test2" element={<Test2/>}/>
+                    <Route path="/services" element={<Services/>}/>
+                    <Route path="/favorites" element={<Services/>}/>
+                    <Route path="/agend" element={<Services/>}/>
+                    <Route path="/my-services" element={<Services/>}/>
                 </Route>
             </Routes>
         </BrowserRouter>

@@ -1,14 +1,26 @@
 import { Outlet } from "react-router-dom"
+import { useAuth } from "./modules/auth/hooks/useAuth"
+import { Navigate } from "react-router-dom"
+import { NavBar } from "./shared/components/NavBar"
 
 export function App() {
-  return (
-    <>
-      <header>Este es un header</header>
-        <main>
+  const {user, loading} = useAuth()
+
+  if (loading){
+    return <div>cargando...</div>
+  }
+
+  if(user === null){
+    return <Navigate to='/login' replace/>
+  }
+
+  return(
+    <div className="flex">
+      <NavBar rol={user.rol}/>
+        <main className="p-8 bg-card w-full h-screen overflow-y-scroll">
           <Outlet/>
         </main>
-      <footer>Este es un footer</footer>
-    </>
+    </div>
   )
 }
 

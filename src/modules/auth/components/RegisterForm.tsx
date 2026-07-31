@@ -4,6 +4,11 @@ import { useNavigate, Link} from 'react-router-dom';
 import { useAuth } from "../hooks/useAuth";
 import { validatePassword, validateEmail } from "../../../shared/utils/validators";
 
+import { FaRegUser } from "react-icons/fa";
+import { MdOutlineEmail } from "react-icons/md";
+import { PiSquaresFourThin,  PiShieldCheckBold } from "react-icons/pi";
+import { RiLockPasswordLine } from "react-icons/ri";
+
 export function RegisterForm(){
     const {register} = useAuth()
     const navigate = useNavigate()
@@ -67,66 +72,90 @@ export function RegisterForm(){
 
                 <div className="flex flex-col gap-2">
                     <label className="font-medium text-xs">Nombre completo</label>
-                    <input 
-                    type="text" 
-                    value={name}
-                    onChange={(e) => setName(e.target.value)} 
-                    className="px-3 py-2 border rounded-md border-gray-300 
-                    focus:outline-none focus:border-highlight"
-                    />
+                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
+                    border-gray-300 focus:border-highlight">
+                        <FaRegUser />
+                        <input 
+                        type="text" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)} 
+                        className="w-full focus:outline-none"
+                        placeholder="Ej. Juan Perez"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
                     <label className="font-medium text-xs">Correo electrónico</label>
-                    <input 
-                    type="email"
-                    value={correo}
-                    onChange={(e)=> setCorreo(e.target.value)}
-                    className="px-3 py-2 border rounded-md border-gray-300
-                    focus:outline-none focus:border-highlight"
-                    />
+                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
+                    border-gray-300">
+                        <MdOutlineEmail />
+                        <input 
+                        type="email"
+                        value={correo}
+                        onChange={(e)=> setCorreo(e.target.value)}
+                        className="focus:outline-none w-full"
+                        placeholder="tu@gmail.com"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
                     <label className="font-medium text-xs">Tipo de cliente</label>
-                    <select value={rol} onChange={(e)=>{setRol(e.target.value)}}
-                        className="px-3 py-2 border rounded-md border-gray-300"
-                        >
-                        <option value="cliente">Cliente</option>
-                        <option value="negocio">Negocio</option>
-                    </select>
+                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
+                    border-gray-300">
+                        <PiSquaresFourThin />
+                        <select value={rol} onChange={(e)=>{setRol(e.target.value)}}
+                            className="w-full focus:outline-none"
+                            >
+                            <option value="cliente">Cliente</option>
+                            <option value="negocio">Negocio</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div className="flex justify-around gap-2">
                     <div className="flex flex-col gap-2">
-                        <label className="font-medium text-xs">Contraseña</label> 
-                        <input 
-                        type="password" 
-                        value={password}
-                        onChange={(e)=>setPassword(e.target.value)}
-                        className="px-3 py-2 border rounded-md border-gray-300
-                        focus:outline-none focus:border-highlight"
-                        />
+                        <label className="font-medium text-xs">Contraseña</label>
+                        <div className="flex items-center gap-2 px-3 py-2 border 
+                        rounded-md border-gray-300">
+                            <RiLockPasswordLine />
+                            <input 
+                            type="password" 
+                            value={password}
+                            onChange={(e)=>setPassword(e.target.value)}
+                            className="focus:outline-none w-full"
+                            placeholder="● ● ● ● ● ●"
+                            />
+                        </div>
                     </div>
 
                     <div className="flex flex-col gap-2">
                         <label className="font-medium text-xs">Confirmar contraseña</label>
-                        <input 
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="px-3 py-2 border rounded-md border-gray-300
-                        focus:outline-none focus:border-highlight"
-                        />
+                        <div className="flex items-center gap-2 px-3 py-2 border 
+                        rounded-md border-gray-300">
+                            <PiShieldCheckBold/>
+                            <input 
+                            type="password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="focus:outline-none w-full"
+                            placeholder="● ● ● ● ● ●"
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {error && <p>{error}</p>}
+                {error && 
+                    <label className="text-error font-medium text-xs"
+                    >{error}
+                    </label>
+                }
 
                 <button type="submit" disabled={loading}
                 className="p-2 bg-primary rounded-md text-card hover:bg-[#BF5842]"
                 >
-                    {loading ? 'creando cuenta': 'Resgitrarse'}
+                    {loading ? 'Creando cuenta': 'Resgitrarse'}
                 </button>
 
                 <div className="flex text-xs justify-center gap-1 font-medium">

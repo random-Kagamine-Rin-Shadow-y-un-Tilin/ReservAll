@@ -1,6 +1,6 @@
 import { NavItem } from "./NavItem";
 import { IoStorefrontOutline , IoStorefront ,IoPerson, IoPersonOutline} from "react-icons/io5";
-import { FaHistory } from "react-icons/fa";
+import { GoHistory } from "react-icons/go";
 
 export function GeneralOptions(){
     return(
@@ -9,8 +9,8 @@ export function GeneralOptions(){
             IconInactive={IoStorefrontOutline}/>
             <NavItem to="/test" end label="Mi perfil" IconActive={IoPerson} 
             IconInactive={IoPersonOutline}/>
-            <NavItem to="/test2" end label="Historial" IconActive={FaHistory} 
-            IconInactive={FaHistory}/>
+            <NavItem to="/test2" end label="Historial" IconActive={GoHistory} 
+            IconInactive={GoHistory}/>
         </>
     )
 }

@@ -35,3 +35,16 @@ export async function uploadShopImage(file: File): Promise <string> {
     const data = await res.json()
     return data.url
 }
+
+// Get shops for owner
+
+export async function getOwnerShops(): Promise<Shop[]> {
+    const res = await fetchWithAuth(`${API_URL}/shop/my-shops`)
+
+    if(!res.ok){
+        const error = await res.json()
+        throw new Error(error.detail || 'Error al obtener tus negocios.')
+    }
+
+    return res.json()
+}

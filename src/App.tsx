@@ -17,7 +17,7 @@ export function App() {
   return(
     <div className="flex">
       <NavBar rol={user.rol}/>
-        <main className="p-8 bg-card w-full h-screen overflow-y-scroll">
+        <main className="p-8 w-full h-screen overflow-y-scroll">
           <Outlet/>
         </main>
     </div>

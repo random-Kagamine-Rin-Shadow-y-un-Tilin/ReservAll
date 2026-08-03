@@ -5,7 +5,7 @@ import { LocalOptions } from "./NavBar/LocalOptions"
 export function NavBar({ rol }: {rol: string}){
 
     return(
-        <nav className="h-screen bg-background w-min flex flex-col border-r 
+        <nav className="h-screen bg-card w-min flex flex-col border-r 
         border-gray-300">
             <label className="text-[#9f402d] font-medium text-3xl p-8">LOGOTIPO</label>
 

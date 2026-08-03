@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { App } from '../App'
+import { RouteProtect } from "./RoueProtect";
 
 //Import of Routes
 import { authRoutes } from "./routes/auth.routes";

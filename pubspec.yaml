@@ -1,0 +1,30 @@
+name: srln_negocio_app
+description: "A new Flutter project."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  http: ^1.1.0
+  provider: ^6.0.5
+  shared_preferences: ^2.2.2
+  jwt_decoder: ^2.0.1
+  flutter_secure_storage: ^9.0.0
+  image_picker: ^1.0.5
+  intl: ^0.18.1
+  cookie_jar: ^4.0.8
+  dio: ^5.4.0
+  dio_cookie_manager: ^3.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true

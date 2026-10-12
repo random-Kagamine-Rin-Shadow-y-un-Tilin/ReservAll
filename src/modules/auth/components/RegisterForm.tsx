@@ -101,7 +101,7 @@ export function RegisterForm(){
                 </div>
 
                 <div className="flex flex-col gap-2">
-                    <label className="font-medium text-xs">Tipo de cliente</label>
+                    <label className="font-medium text-xs">Tipo de usuario</label>
                     <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
                     border-gray-300">
                         <PiSquaresFourThin />

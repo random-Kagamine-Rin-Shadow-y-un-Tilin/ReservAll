@@ -5,11 +5,11 @@ import { GoHistory } from "react-icons/go";
 export function GeneralOptions(){
     return(
         <>
-            <NavItem to="/" end label="Locales" IconActive={IoStorefront} 
+            <NavItem to="/shop" label="Locales" IconActive={IoStorefront} 
             IconInactive={IoStorefrontOutline}/>
-            <NavItem to="/test" end label="Mi perfil" IconActive={IoPerson} 
+            <NavItem to="/test" label="Mi perfil" IconActive={IoPerson} 
             IconInactive={IoPersonOutline}/>
-            <NavItem to="/test2" end label="Historial" IconActive={GoHistory} 
+            <NavItem to="/test2" label="Historial" IconActive={GoHistory} 
             IconInactive={GoHistory}/>
         </>
     )

@@ -1,6 +1,6 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { App } from '../App'
-import { RouteProtect } from "./RoueProtect";
+import { RouteProtect } from "./RouteProtect";
 
 //Import of Routes
 import { authRoutes } from "./routes/auth.routes";
@@ -25,23 +25,34 @@ function Services(){
     )
 }
 
+function RedirectRoot(){
+    const location = useLocation()
+
+    if (location.pathname === '/'){
+        return <Navigate to='/shop' replace/>
+    }
+
+    return null
+}
+
 export function AppRouter(){
     return(
         <BrowserRouter>
+        <RedirectRoot/>
             <Routes>
                 {/* Routes without Layout */}
                 {authRoutes}
 
                 {/* Routes with Layout */}
-                <Route element={<App/>}>
-                    {shopRoutes}
-                    <Route path="/test" element={<Test/>}/>
-                    <Route path="/test2" element={<Test2/>}/>
-                    <Route path="/services" element={<Services/>}/>
-                    <Route path="/favorites" element={<Services/>}/>
-                    <Route path="/agend" element={<Services/>}/>
-                    <Route path="/my-services" element={<Services/>}/>
-                </Route>
+                    <Route element={<App/>}>
+                        {shopRoutes}
+                        <Route path="/test" element={<Test/>}/>
+                        <Route path="/test2" element={<Test2/>}/>
+                        <Route path="/services" element={<Services/>}/>
+                        <Route path="/favorites" element={<Services/>}/>
+                        <Route path="/agend" element={<Services/>}/>
+                        <Route path="/my-services" element={<Services/>}/>
+                    </Route>
             </Routes>
         </BrowserRouter>
     )

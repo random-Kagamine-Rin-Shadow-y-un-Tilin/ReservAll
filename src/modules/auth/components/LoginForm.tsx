@@ -22,7 +22,7 @@ export function LoginForm(){
 
         try{
             await login({correo, password})
-            navigate('/')
+            navigate('/shop')
         } catch (err){
             setError(err instanceof Error ? err.message : 'Error al iniciar sesión.')
         } finally {
@@ -81,7 +81,7 @@ export function LoginForm(){
 
                 <div className="flex text-xs justify-center gap-1 font-medium">
                     <label className="text-gray-500">¿Aún no tienes una cuenta?</label>
-                    <Link to={'/login'} className="text-secondary">Resgitrate aquí</Link>
+                    <Link to={'/register'} className="text-secondary">Resgitrate aquí</Link>
                 </div>
             </form>
         </main>

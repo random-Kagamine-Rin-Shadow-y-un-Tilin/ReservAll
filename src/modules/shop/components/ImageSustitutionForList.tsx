@@ -1,4 +1,4 @@
-import { getCategoryStyle } from "../utils/caregoryStyle"
+import { getCategoryStyle } from "../utils/categoryStyle"
 import { FaShop } from "react-icons/fa6";
 
 export function ImageSustitutionForList({category} : {category: string}){

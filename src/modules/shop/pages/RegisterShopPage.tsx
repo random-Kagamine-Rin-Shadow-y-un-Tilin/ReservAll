@@ -1,4 +1,4 @@
-import { ShopRegisterForm } from "../components/ShopRegisterForm"
+import { ShopRegisterForm } from "../components/forms/register/ShopRegisterForm"
 
 export function RegisterShopPage(){
 

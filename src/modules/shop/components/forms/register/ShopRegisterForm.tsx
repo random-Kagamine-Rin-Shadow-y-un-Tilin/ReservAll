@@ -1,22 +1,28 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom";
 import type { FormEvent, ChangeEvent } from "react";
-import { registerShop, uploadShopImage } from "../api"
+import { registerShop, uploadShopImage } from "../../../api"
 import { CiTextAlignJustify } from "react-icons/ci";
 import { PiTextAa } from "react-icons/pi";
 
-const CATEGORIES = ['Barberia', 'Spa', 'Restaurante', 'Belleza', 'Otro']
+const CATEGORIES = [
+    {'nombre': 'Barberia', 'id': 1},
+    {'nombre': 'Spa', 'id': 2},
+    {'nombre': 'Restaurante', 'id': 3},
+    {'nombre': 'Belleza', 'id': 4},
+    {'nombre': 'Otro', 'id': 5},
+]
 
 export function ShopRegisterForm(){
     const navigate = useNavigate()
 
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
-    const [category, setCategory] = useState('')
+    const [category, setCategory] = useState<number>(1)
     const [fileImage, setFileImage] = useState<File | null>(null)
     const [previewUrl, setPreviewUrl] = useState<string | null> (null)
 
-    const [error, setError] = useState<String | null>(null)
+    const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
 
     function handleFileChange(e: ChangeEvent<HTMLInputElement>){
@@ -42,7 +48,7 @@ export function ShopRegisterForm(){
         e.preventDefault()
         setError(null)
 
-        if (!name.trim() ||! description.trim() || !category){
+        if (!name.trim() || !description.trim() || !category){
             setError('Nombre, descripción y categoria son obligatorios.')
             return
         }
@@ -62,7 +68,7 @@ export function ShopRegisterForm(){
                 categoria_negocio: category,
             })
 
-            navigate('/')
+            navigate(`/shop/${shop.id}`)
         } catch (err){
             setError(err instanceof Error ? err.message : 'Error al registrar negocio.')
         } finally{
@@ -71,7 +77,9 @@ export function ShopRegisterForm(){
     }
 
     return( 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} 
+        className="flex flex-col gap-4 p-4 bg-card rounded-2xl shadow"
+        >
             <h2 className="text-4xl font-medium">Registrar negocio</h2>
 
             <div className="flex flex-col gap-1">
@@ -109,12 +117,12 @@ export function ShopRegisterForm(){
                     <CiTextAlignJustify/>
                     <select 
                     value={category}
-                    onChange={(e)=> setCategory(e.target.value)}
+                    onChange={(e)=> setCategory(Number(e.target.value))}
                     className="w-full focus:outline-none"
                     >
                         <option value="">Selecciona una categoria</option>
                         {CATEGORIES.map((cat)=>(
-                            <option key={cat} value={cat.toLowerCase()}>{cat}</option>
+                            <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                         ))}
                     </select>
                 </div>
@@ -147,7 +155,7 @@ export function ShopRegisterForm(){
                         />
                     ):(
                         <span className="text-gray-500 text-sm">
-                            Sim imagen seleccionada
+                            Sin imagen seleccionada
                         </span>
                     )}
 

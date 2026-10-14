@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'SRNL Back',
-        theme: AppTheme.lightTheme, // 👈 Usando la paleta de colores
+        theme: AppTheme.lightTheme, 
         home: Consumer<AuthController>(
           builder: (context, authController, child) {
             if (authController.isLoading) {

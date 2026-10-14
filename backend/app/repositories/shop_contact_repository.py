@@ -28,4 +28,30 @@ async def create_contact(pool: asyncpg.Pool, shop_id: int, red_name: str, url: s
     async with pool.acquire() as conn:
             return await conn.fetchrow(query, shop_id, red_name, url)
     
-    
+async def update_contact(pool: asyncpg.Pool, contact_id: int, url: str):
+    query = """
+        UPDATE redes_sociales
+        SET url = $1
+        WHERE id_social = $2
+        RETURNING id_social, nombre_red, url
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, url, contact_id)
+
+async def get_contact_by_id(pool: asyncpg.Pool, contact_id: int):
+    query = """
+        SELECT id_social, negocio_id, nombre_red, url
+        FROM redes_sociales
+        WHERE id_social = $1
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, contact_id)
+
+async def delete_contact(pool: asyncpg.Pool, contact_id: int):
+    query = """
+        DELETE FROM redes_sociales
+        WHERE id_social = $1
+        RETURNING id_social
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, contact_id)

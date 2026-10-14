@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from app.core.dependencies import get_db_pool, verify_api_key, get_current_user
-from app.models.shop import ShopRegister, ShopOut, ShopFullProfileOut, ShopEdit
-from app.models.shop_contact import ShopContactRegister, ShopContactOut
-from app.models.shop_schedule import ShopRegisterSchedule, ShopScheduleOut
+from app.models.shop import ShopRegister, ShopOut, ShopFullProfileOut, ShopEdit, ShopStatusUpdate
+from app.models.shop_contact import ShopContactRegister, ShopContactOut, ShopContactUpdate
+from app.models.shop_schedule import ShopRegisterSchedule, ShopScheduleOut, ShopScheduleUpdate
 from app.models.shop_address import ShopAddressOut, ShopAddressRegister
 from app.services import shop_service
 from app.core.storage import upload_img
@@ -149,3 +149,70 @@ async def resgiter_address(
 ):
     address = await shop_service.insert_address(pool, shop_id, int(current_user['sub']), data)
     return dict(address)
+
+@router.put("/edit-contact/{shop_id}/{contact_id}", response_model=ShopContactOut)
+async def edit_contact(
+    shop_id: int,
+    contact_id: int,
+    data: ShopContactUpdate,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    contact = await shop_service.update_contact(
+        pool, shop_id, contact_id, data, int(current_user["sub"])
+    )
+    return dict(contact)
+
+@router.delete("/delete-contact/{shop_id}/{contact_id}")
+async def delete_contact(
+    shop_id: int,
+    contact_id: int,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await shop_service.delete_contact(
+        pool, shop_id, contact_id, int(current_user["sub"])
+    )
+    
+@router.put("/edit-schedule/{shop_id}/{schedule_id}", response_model=ShopScheduleOut)
+async def edit_schedule(
+    shop_id: int,
+    schedule_id: int,
+    data: ShopScheduleUpdate,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    schedule = await shop_service.edit_schedule(
+        pool, shop_id, schedule_id, data, int(current_user["sub"])
+    )
+    return dict(schedule)
+
+@router.delete("/delete-schedule/{shop_id}/{schedule_id}")
+async def delete_schedule(
+    shop_id: int,
+    schedule_id: int,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await shop_service.delete_schedule(
+        pool, shop_id, schedule_id, int(current_user["sub"])
+    )
+    
+@router.delete("/delete-shop/{shop_id}")
+async def delete_shop(
+    shop_id: int,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await shop_service.delete_shop(pool, shop_id, int(current_user["sub"]))
+
+@router.patch("/toggle-status/{shop_id}")
+async def toggle_shop_status(
+    shop_id: int,
+    data: ShopStatusUpdate,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await shop_service.toggle_shop_status(
+        pool, shop_id, data.estado_negocio, int(current_user["sub"])
+    )

@@ -46,7 +46,6 @@ class ApiService {
     }
   }
 
-  // 👇 POST CORREGIDO PARA MANEJAR FormData
   Future<Response> post(
     String endpoint, {
     dynamic body,

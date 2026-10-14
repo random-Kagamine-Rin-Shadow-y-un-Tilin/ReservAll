@@ -4,8 +4,8 @@ import '../services/shop_service.dart';
 import 'dart:io';
 
 class ShopController extends ChangeNotifier {
-  final ShopService _shopService = ShopService();
-  
+  final ShopService shopService = ShopService();
+
   List<Shop> _myShops = [];
   Shop? _currentShop;
   bool _isLoading = false;
@@ -36,15 +36,15 @@ class ShopController extends ChangeNotifier {
         categoriaNegocio: categoriaNegocio,
       );
 
-      final shop = await _shopService.registerShop(request);
+      final shop = await shopService.registerShop(request);
       _currentShop = shop;
 
       // 2. Si hay imagen, subirla
       if (imageFile != null && shop.id != null) {
         try {
-          final imageUrl = await _shopService.uploadImage(imageFile, shop.id!);
+          final imageUrl = await shopService.uploadImage(imageFile, shop.id!);
           _currentShop = shop.copyWith(imagenNegocio: imageUrl);
-          
+
           // Actualizar en la lista si existe
           final index = _myShops.indexWhere((s) => s.id == shop.id);
           if (index != -1) {
@@ -52,7 +52,8 @@ class ShopController extends ChangeNotifier {
           }
         } catch (e) {
           // Si falla la imagen, no fallar todo
-          _errorMessage = 'Negocio registrado, pero falló la imagen: ${e.toString()}';
+          _errorMessage =
+              'Negocio registrado, pero falló la imagen: ${e.toString()}';
         }
       }
 
@@ -77,7 +78,7 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _myShops = await _shopService.getMyShops();
+      _myShops = await shopService.getMyShops();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -96,7 +97,7 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _currentShop = await _shopService.getShopById(shopId);
+      _currentShop = await shopService.getShopById(shopId);
       _isLoading = false;
       notifyListeners();
       return true;
@@ -115,14 +116,14 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final imageUrl = await _shopService.uploadImage(imageFile, shopId);
-      
+      final imageUrl = await shopService.uploadImage(imageFile, shopId);
+
       // Actualizar el negocio en la lista
       final index = _myShops.indexWhere((s) => s.id == shopId);
       if (index != -1) {
         _myShops[index] = _myShops[index].copyWith(imagenNegocio: imageUrl);
       }
-      
+
       if (_currentShop?.id == shopId) {
         _currentShop = _currentShop?.copyWith(imagenNegocio: imageUrl);
       }
@@ -150,5 +151,47 @@ class ShopController extends ChangeNotifier {
     _currentShop = null;
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // HU_12: Editar contacto
+  Future<bool> editContact(int shopId, int contactId, String url) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await shopService.editContact(shopId, contactId, url);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_12: Eliminar contacto
+  Future<bool> deleteContact(int shopId, int contactId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await shopService.deleteContact(shopId, contactId);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 }

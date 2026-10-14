@@ -18,3 +18,6 @@ class ShopContactOut(BaseModel):
     id_social: int
     nombre_red: str
     url: str
+    
+class ShopContactUpdate(BaseModel):
+    url: str

@@ -49,3 +49,23 @@ async def edit_basic_shop(pool: asyncpg.Pool, id_shop: int, name: str, descripti
     query = "SELECT * FROM negocios_view WHERE id = $1"
     async with pool.acquire() as conn:
         return await conn.fetchrow(query, id_shop)
+    
+async def soft_delete_shop(pool: asyncpg.Pool, shop_id: int, dueno_id: int):
+    query = """
+        UPDATE negocios
+        SET estado_negocio = false
+        WHERE id = $1 AND dueno_id = $2
+        RETURNING id, nombre, estado_negocio
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, shop_id, dueno_id)
+
+async def reactivate_shop(pool: asyncpg.Pool, shop_id: int, dueno_id: int):
+    query = """
+        UPDATE negocios
+        SET estado_negocio = true
+        WHERE id = $1 AND dueno_id = $2
+        RETURNING id, nombre, estado_negocio
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, shop_id, dueno_id)

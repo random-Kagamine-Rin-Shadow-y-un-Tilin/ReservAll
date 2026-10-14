@@ -50,3 +50,6 @@ class ShopFullProfileOut(BaseModel):
     contacto: list[ShopContactOut] = []
     horario: list[ShopScheduleOut] = []
     direccion: ShopAddressOut | None = None
+    
+class ShopStatusUpdate(BaseModel):
+    estado_negocio: bool

@@ -255,14 +255,8 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
     );
   }
 
-  String _getCategoryName(int categoryId) {
-    const categories = {
-      1: 'Barberia',
-      2: 'Spa',
-      3: 'Restaurante',
-      4: 'Belleza',
-      5: 'Otros',
-    };
-    return categories[categoryId] ?? 'Sin categoría';
-  }
+  String _getCategoryName(String? categoria) {
+  if (categoria == null || categoria.isEmpty) return 'Sin categoría';
+  return categoria;
+}
 }

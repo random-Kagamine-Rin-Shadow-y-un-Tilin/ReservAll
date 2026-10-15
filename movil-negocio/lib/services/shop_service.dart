@@ -51,14 +51,8 @@ class ShopService {
   //  SUBIR IMAGEN
   Future<String> uploadImage(File imageFile, int shopId) async {
     try {
-      // Crear FormData con el archivo
       final formData = FormData.fromMap({
-        'shop_id': shopId.toString(),
-        'image': await MultipartFile.fromFile(
-          imageFile.path,
-          filename: imageFile.path.split('/').last,
-          contentType: DioMediaType('image', 'jpeg'),
-        ),
+        'file': await MultipartFile.fromFile(imageFile.path),
       });
 
       final response = await _apiService.post(
@@ -70,32 +64,11 @@ class ShopService {
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
-        if (response.data == null) {
-          throw Exception('Respuesta vacía del servidor');
-        }
-
-        if (response.data is! Map<String, dynamic>) {
-          throw Exception('Formato de respuesta inválido');
-        }
-
         final data = response.data as Map<String, dynamic>;
-
-        // Buscar la URL de la imagen en diferentes formatos de respuesta
-        final imageUrl =
-            data['data']?['image_url'] ??
-            data['data']?['url'] ??
-            data['image_url'] ??
-            data['url'] ??
-            '';
-
-        if (imageUrl.isEmpty) {
-          throw Exception('No se pudo obtener la URL de la imagen');
-        }
-
-        return imageUrl;
+        return data['url'] ?? '';
       } else {
         final errorData = response.data as Map<String, dynamic>?;
-        throw Exception(errorData?['detail'] ?? 'Error al subir la imagen');
+        throw Exception(errorData?['detail'] ?? 'Error al subir imagen');
       }
     } catch (e) {
       rethrow;
@@ -206,6 +179,34 @@ class ShopService {
       } else {
         final errorData = response.data as Map<String, dynamic>?;
         throw Exception(errorData?['detail'] ?? 'Error al obtener el negocio');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // HU_11: Editar negocio
+  Future<Shop> editShop(int shopId, ShopEditRequest request) async {
+    try {
+      final response = await _apiService.put(
+        '/shop/edit-shop/$shopId',
+        body: request.toJson(),
+        requiresAuth: true,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        if (response.data == null) {
+          throw Exception('Respuesta vacía del servidor');
+        }
+        if (response.data is! Map<String, dynamic>) {
+          throw Exception('Formato de respuesta inválido');
+        }
+        return Shop.fromJson(response.data as Map<String, dynamic>);
+      } else {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al editar negocio');
       }
     } catch (e) {
       rethrow;

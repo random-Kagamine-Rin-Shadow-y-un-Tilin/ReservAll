@@ -8,7 +8,6 @@ import 'edit_contact_screen.dart';
 import 'edit_schedule_screen.dart';
 import 'edit_shop_screen.dart';
 
-
 class ShopDetailScreen extends StatefulWidget {
   final int shopId;
 
@@ -402,41 +401,65 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   }
 
   Widget _buildStatusCard(Shop shop) {
+    final isActive = shop.estadoNegocio ?? false;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        color: isActive
+            ? AppColors.success.withOpacity(0.1)
+            : AppColors.error.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive
+              ? AppColors.success.withOpacity(0.3)
+              : AppColors.error.withOpacity(0.3),
+        ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Estado del negocio',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isActive ? AppColors.success : AppColors.error,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isActive ? Icons.check : Icons.close,
+              color: AppColors.surface,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isActive ? 'Negocio activo' : 'Negocio inactivo',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: isActive ? AppColors.success : AppColors.error,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                shop.estadoNegocio == true ? 'Activo' : 'Inactivo',
-                style: TextStyle(
-                  color: shop.estadoNegocio == true
-                      ? AppColors.success
-                      : AppColors.error,
+                const SizedBox(height: 4),
+                Text(
+                  isActive
+                      ? 'Los clientes pueden ver y reservar'
+                      : 'Los clientes no pueden ver el negocio',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           Switch(
-            value: shop.estadoNegocio ?? false,
+            value: isActive,
             activeColor: AppColors.success,
-            onChanged: (value) => _toggleStatus(value),
+            onChanged: _toggleStatus,
           ),
         ],
       ),
@@ -542,14 +565,25 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   Future<void> _toggleStatus(bool value) async {
     final controller = context.read<ShopController>();
     final success = await controller.toggleShopStatus(widget.shopId, value);
+
     if (!mounted) return;
+
     if (success) {
-      _showSnack(
-        value ? '✅ Negocio activado' : '⚠️ Negocio desactivado',
-        value ? AppColors.success : AppColors.warning,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value ? '✅ Negocio activado' : '⚠️ Negocio desactivado',
+          ),
+          backgroundColor: value ? AppColors.success : AppColors.warning,
+        ),
       );
     } else {
-      _showSnack(controller.errorMessage ?? 'Error', AppColors.error);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(controller.errorMessage ?? 'Error al cambiar estado'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 

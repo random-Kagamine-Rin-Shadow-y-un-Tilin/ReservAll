@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../controllers/shop_controller.dart';
-import '../../models/shop_model.dart';
+import '../../models/shop_contact_model.dart';
 import '../widgets/loading_widget.dart';
 import 'edit_contact_screen.dart';
-import 'edit_schedule_screen.dart';
 
 class ShopDetailScreen extends StatefulWidget {
   final int shopId;
@@ -17,16 +16,112 @@ class ShopDetailScreen extends StatefulWidget {
 }
 
 class _ShopDetailScreenState extends State<ShopDetailScreen> {
+  List<ShopContact> _contacts = [];
+  bool _loadingContacts = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ShopController>().getShopById(widget.shopId);
+      _loadContacts();
     });
   }
 
-  Future<void> _reload() async {
-    await context.read<ShopController>().getShopById(widget.shopId);
+  Future<void> _loadContacts() async {
+    setState(() => _loadingContacts = true);
+    try {
+      final controller = context.read<ShopController>();
+      final contacts = await controller.shopService.getContacts(widget.shopId);
+      setState(() => _contacts = contacts);
+    } catch (e) {
+      // Silencioso
+    } finally {
+      setState(() => _loadingContacts = false);
+    }
+  }
+
+  Future<void> _openEditContact(ShopContact contact) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            EditContactScreen(shopId: widget.shopId, contact: contact),
+      ),
+    );
+    if (result == true) {
+      await _loadContacts();
+    }
+  }
+
+  Future<void> _confirmDeleteContact(ShopContact contact) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar contacto?'),
+        content: Text(
+          'Se eliminará la red "${contact.nombreRed}" de tu negocio.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final controller = context.read<ShopController>();
+      final success = await controller.deleteContact(
+        widget.shopId,
+        contact.idSocial,
+      );
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Contacto eliminado'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        await _loadContacts();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(controller.errorMessage ?? 'Error al eliminar'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  IconData _getSocialIcon(String name) {
+    switch (name.toLowerCase()) {
+      case 'facebook':
+        return Icons.facebook;
+      case 'instagram':
+        return Icons.camera_alt;
+      case 'whatsapp':
+        return Icons.chat;
+      case 'telefono':
+        return Icons.phone;
+      case 'tiktok':
+        return Icons.music_note;
+      case 'x':
+        return Icons.alternate_email;
+      case 'sitio_web':
+        return Icons.language;
+      default:
+        return Icons.link;
+    }
   }
 
   @override
@@ -165,16 +260,96 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                     icon: Icons.share,
                     onAdd: () => _openAddContact(),
                   ),
-                  const SizedBox(height: 8),
-                  _buildContactsList(profile?.contacts ?? []),
+                ),
+                const SizedBox(height: 16),
 
-                  const SizedBox(height: 24),
+                // ============ HU_12: REDES DE CONTACTO ============
+                const Text(
+                  'Redes de contacto',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
 
-                  // ---------- Horarios ----------
-                  _buildSectionHeader(
-                    title: 'Horarios de atención',
-                    icon: Icons.schedule,
-                    onAdd: () => _openAddSchedule(),
+                if (_loadingContacts)
+                  const Center(child: CircularProgressIndicator())
+                else if (_contacts.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Sin contactos registrados',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
+                  )
+                else
+                  ..._contacts.map(
+                    (contact) => Card(
+                      elevation: 1,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListTile(
+                        leading: Icon(
+                          _getSocialIcon(contact.nombreRed),
+                          color: AppColors.primary,
+                        ),
+                        title: Text(
+                          contact.nombreRed,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          contact.url,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.edit,
+                                size: 20,
+                                color: AppColors.primary,
+                              ),
+                              onPressed: () => _openEditContact(contact),
+                              tooltip: 'Editar',
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete,
+                                size: 20,
+                                color: AppColors.error,
+                              ),
+                              onPressed: () => _confirmDeleteContact(contact),
+                              tooltip: 'Eliminar',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 16),
+
+                // Información adicional
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
                   const SizedBox(height: 8),
                   _buildSchedulesList(profile?.schedules ?? []),

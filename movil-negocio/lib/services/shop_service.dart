@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../models/shop_model.dart';
+import '../models/shop_contact_model.dart';
 import 'api_service.dart';
 
 class ShopService {
@@ -363,5 +364,72 @@ class ShopService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  // HU_12: Editar contacto
+Future<ShopContact> editContact(int shopId, int contactId, String url) async {
+  try {
+    final response = await _apiService.put(
+      '/shop/edit-contact/$shopId/$contactId',
+      body: {'url': url},
+      requiresAuth: true,
+    );
+
+    if (response.statusCode != null &&
+        response.statusCode! >= 200 &&
+        response.statusCode! < 300) {
+      if (response.data == null) {
+        throw Exception('Respuesta vacía del servidor');
+      }
+      if (response.data is! Map<String, dynamic>) {
+        throw Exception('Formato de respuesta inválido');
+      }
+      return ShopContact.fromJson(response.data as Map<String, dynamic>);
+    } else {
+      final errorData = response.data as Map<String, dynamic>?;
+      throw Exception(errorData?['detail'] ?? 'Error al editar contacto');
+    }
+  } catch (e) {
+    rethrow;
+  }
+}
+
+// HU_12: Eliminar contacto
+Future<void> deleteContact(int shopId, int contactId) async {
+  try {
+    final response = await _apiService.delete(
+      '/shop/delete-contact/$shopId/$contactId',
+      requiresAuth: true,
+    );
+
+    if (response.statusCode == null ||
+        response.statusCode! < 200 ||
+        response.statusCode! >= 300) {
+      final errorData = response.data as Map<String, dynamic>?;
+      throw Exception(errorData?['detail'] ?? 'Error al eliminar contacto');
+    }
+  } catch (e) {
+    rethrow;
+  }
+}
+}
+
+Future<List<ShopContact>> getContacts(int shopId) async {
+  try {
+    final response = await _apiService.get(
+      '/shop/get-contacts/$shopId',
+      requiresAuth: true,
+    );
+    if (response.statusCode != null &&
+        response.statusCode! >= 200 &&
+        response.statusCode! < 300) {
+      final data = response.data;
+      if (data is List) {
+        return data.map((e) => ShopContact.fromJson(e)).toList();
+      }
+    }
+    return [];
+  } catch (e) {
+    return [];
   }
 }

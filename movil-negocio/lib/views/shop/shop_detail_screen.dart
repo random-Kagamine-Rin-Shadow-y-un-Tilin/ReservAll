@@ -7,6 +7,7 @@ import '../widgets/loading_widget.dart';
 import 'edit_contact_screen.dart';
 import 'edit_schedule_screen.dart';
 
+
 class ShopDetailScreen extends StatefulWidget {
   final int shopId;
 

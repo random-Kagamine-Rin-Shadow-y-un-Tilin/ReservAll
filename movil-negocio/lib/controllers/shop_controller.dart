@@ -71,6 +71,48 @@ class ShopController extends ChangeNotifier {
     }
   }
 
+  Future<bool> editContact(int shopId, int contactId, String url) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.editContact(shopId, contactId, url);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_12: Eliminar contacto
+  Future<bool> deleteContact(int shopId, int contactId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.deleteContact(shopId, contactId);
+      // Recargar el perfil completo para que la lista se actualice
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // Obtener mis negocios
   Future<bool> getMyShops() async {
     _isLoading = true;
@@ -91,6 +133,10 @@ class ShopController extends ChangeNotifier {
   }
 
   // Obtener negocio por ID
+  ShopFullProfile? _fullProfile;
+
+  ShopFullProfile? get fullProfile => _fullProfile;
+
   Future<bool> getShopById(int shopId) async {
     _isLoading = true;
     _errorMessage = null;
@@ -106,6 +152,13 @@ class ShopController extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  // recargar el negocio actual si ya se tiene cargado
+  Future<void> reloadCurrentShop() async {
+    if (_currentShop?.id != null) {
+      await getShopById(_currentShop!.id!);
     }
   }
 
@@ -128,6 +181,106 @@ class ShopController extends ChangeNotifier {
         _currentShop = _currentShop?.copyWith(imagenNegocio: imageUrl);
       }
 
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> editSchedule(
+    int shopId,
+    int scheduleId, {
+    String? horaApertura,
+    String? horaCierre,
+    String? horaDescanso,
+    bool? estadoHorario,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.editSchedule(
+        shopId,
+        scheduleId,
+        horaApertura: horaApertura,
+        horaCierre: horaCierre,
+        horaDescanso: horaDescanso,
+        estadoHorario: estadoHorario,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_13: Eliminar horario
+  Future<bool> deleteSchedule(int shopId, int scheduleId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.deleteSchedule(shopId, scheduleId);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_14: Eliminar negocio (soft delete)
+  Future<bool> deleteShop(int shopId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.deleteShop(shopId);
+      _myShops.removeWhere((s) => s.id == shopId);
+      if (_currentShop?.id == shopId) {
+        _currentShop = null;
+        _fullProfile = null;
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_15: Activar/desactivar negocio
+  Future<bool> toggleShopStatus(int shopId, bool estado) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final updated = await _shopService.toggleShopStatus(shopId, estado);
+      // Actualizar en la lista
+      final idx = _myShops.indexWhere((s) => s.id == shopId);
+      if (idx != -1) _myShops[idx] = updated;
+      // Actualizar el actual
+      if (_currentShop?.id == shopId) {
+        _currentShop = updated;
+      }
       _isLoading = false;
       notifyListeners();
       return true;

@@ -162,22 +162,204 @@ class ShopService {
         if (response.data == null) {
           throw Exception('Respuesta vacía del servidor');
         }
-
         if (response.data is! Map<String, dynamic>) {
           throw Exception('Formato de respuesta inválido');
         }
 
         final data = response.data as Map<String, dynamic>;
 
-        if (data['success'] == true && data['data'] != null) {
-          return Shop.fromJson(data['data']);
-        } else if (data['id'] != null) {
-          return Shop.fromJson(data);
-        } else {
-          throw Exception('No se pudo obtener la información del negocio');
+        if (data['general'] != null && data['general'] is Map) {
+          return Shop.fromJson(data['general'] as Map<String, dynamic>);
         }
+
+        // Fallback: si viene plano (para compatibilidad)
+        if (data['id'] != null) {
+          return Shop.fromJson(data);
+        }
+
+        throw Exception('No se pudo obtener la información del negocio');
       } else {
-        throw Exception('Error al obtener el negocio');
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al obtener el negocio');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<ShopFullProfile> getShopFullProfile(int shopId) async {
+    try {
+      final response = await _apiService.get(
+        '/shop/get-shop/$shopId',
+        requiresAuth: true,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        if (response.data == null) {
+          throw Exception('Respuesta vacía del servidor');
+        }
+        if (response.data is! Map<String, dynamic>) {
+          throw Exception('Formato de respuesta inválido');
+        }
+        return ShopFullProfile.fromJson(response.data as Map<String, dynamic>);
+      } else {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al obtener el negocio');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<ShopContact> editContact(int shopId, int contactId, String url) async {
+    try {
+      final response = await _apiService.put(
+        '/shop/edit-contact/$shopId/$contactId',
+        body: {'url': url},
+        requiresAuth: true,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        if (response.data == null) {
+          throw Exception('Respuesta vacía del servidor');
+        }
+        if (response.data is! Map<String, dynamic>) {
+          throw Exception('Formato de respuesta inválido');
+        }
+        return ShopContact.fromJson(response.data as Map<String, dynamic>);
+      } else {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al editar contacto');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // HU_12: Eliminar contacto
+  Future<void> deleteContact(int shopId, int contactId) async {
+    try {
+      final response = await _apiService.delete(
+        '/shop/delete-contact/$shopId/$contactId',
+        requiresAuth: true,
+      );
+
+      if (response.statusCode == null ||
+          response.statusCode! < 200 ||
+          response.statusCode! >= 300) {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al eliminar contacto');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<ShopSchedule> editSchedule(
+    int shopId,
+    int scheduleId, {
+    String? horaApertura,
+    String? horaCierre,
+    String? horaDescanso,
+    bool? estadoHorario,
+  }) async {
+    final body = <String, dynamic>{};
+    if (horaApertura != null) body['hora_apertura'] = horaApertura;
+    if (horaCierre != null) body['hora_cierre'] = horaCierre;
+    if (horaDescanso != null) body['hora_descanso'] = horaDescanso;
+    if (estadoHorario != null) body['estado_horario'] = estadoHorario;
+
+    final response = await _apiService.put(
+      '/shop/edit-schedule/$shopId/$scheduleId',
+      body: body,
+      requiresAuth: true,
+    );
+
+    if (response.statusCode != null &&
+        response.statusCode! >= 200 &&
+        response.statusCode! < 300) {
+      return ShopSchedule.fromJson(response.data as Map<String, dynamic>);
+    } else {
+      final errorData = response.data as Map<String, dynamic>?;
+      throw Exception(errorData?['detail'] ?? 'Error al editar horario');
+    }
+  }
+
+  // HU_13: Eliminar horario
+  Future<void> deleteSchedule(int shopId, int scheduleId) async {
+    try {
+      final response = await _apiService.delete(
+        '/shop/delete-schedule/$shopId/$scheduleId',
+        requiresAuth: true,
+      );
+      if (response.statusCode == null ||
+          response.statusCode! < 200 ||
+          response.statusCode! >= 300) {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al eliminar horario');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // HU_14: Eliminar negocio (soft delete)
+  Future<void> deleteShop(int shopId) async {
+    try {
+      final response = await _apiService.delete(
+        '/shop/delete-shop/$shopId',
+        requiresAuth: true,
+      );
+
+      if (response.statusCode == null ||
+          response.statusCode! < 200 ||
+          response.statusCode! >= 300) {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al eliminar negocio');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // HU_15: Activar/desactivar negocio
+  Future<Shop> toggleShopStatus(int shopId, bool estado) async {
+    try {
+      final response = await _apiService.patch(
+        '/shop/toggle-status/$shopId',
+        body: {'estado_negocio': estado},
+        requiresAuth: true,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        if (response.data == null) {
+          throw Exception('Respuesta vacía del servidor');
+        }
+        if (response.data is! Map<String, dynamic>) {
+          throw Exception('Formato de respuesta inválido');
+        }
+        final data = response.data as Map<String, dynamic>;
+
+        // El backend devuelve { message: "...", shop: {...} }
+        if (data['shop'] != null && data['shop'] is Map) {
+          return Shop.fromJson(data['shop'] as Map<String, dynamic>);
+        }
+
+        // Fallback si devuelve el shop directo
+        if (data['id'] != null) {
+          return Shop.fromJson(data);
+        }
+
+        throw Exception('Formato de respuesta inesperado');
+      } else {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al cambiar estado');
       }
     } catch (e) {
       rethrow;

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../controllers/shop_controller.dart';
-import '../../models/shop_contact_model.dart';
+import '../../models/shop_model.dart';
 import '../widgets/loading_widget.dart';
 import 'edit_contact_screen.dart';
 

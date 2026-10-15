@@ -4,7 +4,7 @@ import '../services/shop_service.dart';
 import 'dart:io';
 
 class ShopController extends ChangeNotifier {
-  final ShopService shopService = ShopService();
+  final ShopService _shopService = ShopService();
 
   List<Shop> _myShops = [];
   Shop? _currentShop;
@@ -36,13 +36,13 @@ class ShopController extends ChangeNotifier {
         categoriaNegocio: categoriaNegocio,
       );
 
-      final shop = await shopService.registerShop(request);
+      final shop = await _shopService.registerShop(request);
       _currentShop = shop;
 
       // 2. Si hay imagen, subirla
       if (imageFile != null && shop.id != null) {
         try {
-          final imageUrl = await shopService.uploadImage(imageFile, shop.id!);
+          final imageUrl = await _shopService.uploadImage(imageFile, shop.id!);
           _currentShop = shop.copyWith(imagenNegocio: imageUrl);
 
           // Actualizar en la lista si existe
@@ -120,7 +120,7 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _myShops = await shopService.getMyShops();
+      _myShops = await _shopService.getMyShops();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -143,7 +143,8 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _currentShop = await shopService.getShopById(shopId);
+      _fullProfile = await _shopService.getShopFullProfile(shopId);
+      _currentShop = _fullProfile!.general;
       _isLoading = false;
       notifyListeners();
       return true;
@@ -169,7 +170,7 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final imageUrl = await shopService.uploadImage(imageFile, shopId);
+      final imageUrl = await _shopService.uploadImage(imageFile, shopId);
 
       // Actualizar el negocio en la lista
       final index = _myShops.indexWhere((s) => s.id == shopId);
@@ -304,47 +305,5 @@ class ShopController extends ChangeNotifier {
     _currentShop = null;
     _errorMessage = null;
     notifyListeners();
-  }
-
-  // HU_12: Editar contacto
-  Future<bool> editContact(int shopId, int contactId, String url) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-    try {
-      await shopService.editContact(shopId, contactId, url);
-      if (_currentShop?.id == shopId) {
-        await getShopById(shopId);
-      }
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  // HU_12: Eliminar contacto
-  Future<bool> deleteContact(int shopId, int contactId) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-    try {
-      await shopService.deleteContact(shopId, contactId);
-      if (_currentShop?.id == shopId) {
-        await getShopById(shopId);
-      }
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
   }
 }

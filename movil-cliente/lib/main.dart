@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/auth/recover_password_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/business/business_list_screen.dart';
 import 'screens/business/business_detail_screen.dart';
 import 'screens/booking/booking_screen.dart';
 import 'screens/booking/booking_list_screen.dart';
-import 'screens/profile/profile_screen.dart';
-import 'screens/profile/edit_profile_screen.dart';
 
 void main() {
   runApp(const MyApp());

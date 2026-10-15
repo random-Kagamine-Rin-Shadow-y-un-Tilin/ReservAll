@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '/services/api_service.dart'; 
+import '/services/api_service.dart';
 
 class BusinessListScreen extends StatefulWidget {
   final String? category;
@@ -42,7 +42,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     }
     try {
       final response = await http.get(
-        Uri.parse("$baseUrl/client/search?q=$query"),
+        Uri.parse("$baseUrl/client/search-by-name?name=$query"),
         headers: {"accept": "application/json", "x-api-key": apiKey},
       );
       if (response.statusCode == 200) {
@@ -63,7 +63,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.category ?? "Negocios"), 
+        title: Text(widget.category ?? "Negocios"),
         centerTitle: true,
       ),
       body: Column(
@@ -72,6 +72,13 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
             padding: const EdgeInsets.all(8),
             child: TextField(
               controller: searchController,
+              onChanged: (value) {
+                if (value.trim().isEmpty) {
+                  fetchShopsList();
+                } else if (value.trim().length >= 2) {
+                  searchShops(value.trim());
+                }
+              },
               decoration: InputDecoration(
                 hintText: "Buscar negocio...",
                 suffixIcon: IconButton(
@@ -90,8 +97,11 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                   child: ListTile(
                     title: Text(shop['nombre']),
                     subtitle: Text(shop['descripcion']),
-                    leading: (shop['imagen_negocio'] != null &&
-                              shop['imagen_negocio'].toString().startsWith("http"))
+                    leading:
+                        (shop['imagen_negocio'] != null &&
+                            shop['imagen_negocio'].toString().startsWith(
+                              "http",
+                            ))
                         ? Image.network(
                             shop['imagen_negocio'],
                             width: 50,

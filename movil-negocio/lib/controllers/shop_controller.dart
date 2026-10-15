@@ -71,6 +71,34 @@ class ShopController extends ChangeNotifier {
     }
   }
 
+  // HU_11: Editar negocio
+  Future<bool> editShop(int shopId, ShopEditRequest request) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final updated = await _shopService.editShop(shopId, request);
+
+      // Actualizar el negocio en la lista
+      final idx = _myShops.indexWhere((s) => s.id == shopId);
+      if (idx != -1) _myShops[idx] = updated;
+
+      // Actualizar el actual
+      if (_currentShop?.id == shopId) {
+        _currentShop = updated;
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> editContact(int shopId, int contactId, String url) async {
     _isLoading = true;
     _errorMessage = null;
@@ -164,32 +192,20 @@ class ShopController extends ChangeNotifier {
   }
 
   // Subir imagen a un negocio existente
-  Future<bool> uploadShopImage(File imageFile, int shopId) async {
+  Future<String?> uploadShopImage(File imageFile, int shopId) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
-
     try {
-      final imageUrl = await _shopService.uploadImage(imageFile, shopId);
-
-      // Actualizar el negocio en la lista
-      final index = _myShops.indexWhere((s) => s.id == shopId);
-      if (index != -1) {
-        _myShops[index] = _myShops[index].copyWith(imagenNegocio: imageUrl);
-      }
-
-      if (_currentShop?.id == shopId) {
-        _currentShop = _currentShop?.copyWith(imagenNegocio: imageUrl);
-      }
-
+      final url = await _shopService.uploadImage(imageFile, shopId);
       _isLoading = false;
       notifyListeners();
-      return true;
+      return url;
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
       _isLoading = false;
       notifyListeners();
-      return false;
+      return null;
     }
   }
 

@@ -6,6 +6,7 @@ import '../../models/shop_model.dart';
 import '../widgets/loading_widget.dart';
 import 'edit_contact_screen.dart';
 import 'edit_schedule_screen.dart';
+import 'edit_shop_screen.dart';
 
 
 class ShopDetailScreen extends StatefulWidget {
@@ -181,11 +182,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   _buildSchedulesList(profile?.schedules ?? []),
 
                   const SizedBox(height: 24),
-
-                  // ---------- Estado del negocio ----------
-                  _buildStatusCard(shop),
-
-                  const SizedBox(height: 16),
 
                   // ---------- Eliminar negocio ----------
                   SizedBox(
@@ -450,10 +446,17 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   // ============ ACCIONES ============
 
   Future<void> _openEditShop() async {
-    // TODO: Implementar pantalla de edición de negocio
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Editar negocio próximamente')),
+    final shop = context.read<ShopController>().currentShop;
+    if (shop == null) return;
+
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => EditShopScreen(shop: shop)),
     );
+
+    if (result == true) {
+      await _reload();
+    }
   }
 
   Future<void> _openAddContact() async {

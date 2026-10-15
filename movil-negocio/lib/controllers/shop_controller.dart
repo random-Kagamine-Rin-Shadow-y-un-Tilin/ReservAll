@@ -5,7 +5,7 @@ import 'dart:io';
 
 class ShopController extends ChangeNotifier {
   final ShopService _shopService = ShopService();
-  
+
   List<Shop> _myShops = [];
   Shop? _currentShop;
   bool _isLoading = false;
@@ -44,7 +44,7 @@ class ShopController extends ChangeNotifier {
         try {
           final imageUrl = await _shopService.uploadImage(imageFile, shop.id!);
           _currentShop = shop.copyWith(imagenNegocio: imageUrl);
-          
+
           // Actualizar en la lista si existe
           final index = _myShops.indexWhere((s) => s.id == shop.id);
           if (index != -1) {
@@ -52,13 +52,56 @@ class ShopController extends ChangeNotifier {
           }
         } catch (e) {
           // Si falla la imagen, no fallar todo
-          _errorMessage = 'Negocio registrado, pero falló la imagen: ${e.toString()}';
+          _errorMessage =
+              'Negocio registrado, pero falló la imagen: ${e.toString()}';
         }
       }
 
       // 3. Actualizar lista de negocios
       await getMyShops();
 
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> editContact(int shopId, int contactId, String url) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.editContact(shopId, contactId, url);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_12: Eliminar contacto
+  Future<bool> deleteContact(int shopId, int contactId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.deleteContact(shopId, contactId);
+      // Recargar el perfil completo para que la lista se actualice
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
       _isLoading = false;
       notifyListeners();
       return true;
@@ -90,13 +133,18 @@ class ShopController extends ChangeNotifier {
   }
 
   // Obtener negocio por ID
+  ShopFullProfile? _fullProfile;
+
+  ShopFullProfile? get fullProfile => _fullProfile;
+
   Future<bool> getShopById(int shopId) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _currentShop = await _shopService.getShopById(shopId);
+      _fullProfile = await _shopService.getShopFullProfile(shopId);
+      _currentShop = _fullProfile!.general;
       _isLoading = false;
       notifyListeners();
       return true;
@@ -108,6 +156,13 @@ class ShopController extends ChangeNotifier {
     }
   }
 
+  // recargar el negocio actual si ya se tiene cargado
+  Future<void> reloadCurrentShop() async {
+    if (_currentShop?.id != null) {
+      await getShopById(_currentShop!.id!);
+    }
+  }
+
   // Subir imagen a un negocio existente
   Future<bool> uploadShopImage(File imageFile, int shopId) async {
     _isLoading = true;
@@ -116,17 +171,117 @@ class ShopController extends ChangeNotifier {
 
     try {
       final imageUrl = await _shopService.uploadImage(imageFile, shopId);
-      
+
       // Actualizar el negocio en la lista
       final index = _myShops.indexWhere((s) => s.id == shopId);
       if (index != -1) {
         _myShops[index] = _myShops[index].copyWith(imagenNegocio: imageUrl);
       }
-      
+
       if (_currentShop?.id == shopId) {
         _currentShop = _currentShop?.copyWith(imagenNegocio: imageUrl);
       }
 
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> editSchedule(
+    int shopId,
+    int scheduleId, {
+    String? horaApertura,
+    String? horaCierre,
+    String? horaDescanso,
+    bool? estadoHorario,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.editSchedule(
+        shopId,
+        scheduleId,
+        horaApertura: horaApertura,
+        horaCierre: horaCierre,
+        horaDescanso: horaDescanso,
+        estadoHorario: estadoHorario,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_13: Eliminar horario
+  Future<bool> deleteSchedule(int shopId, int scheduleId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.deleteSchedule(shopId, scheduleId);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_14: Eliminar negocio (soft delete)
+  Future<bool> deleteShop(int shopId) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.deleteShop(shopId);
+      _myShops.removeWhere((s) => s.id == shopId);
+      if (_currentShop?.id == shopId) {
+        _currentShop = null;
+        _fullProfile = null;
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_15: Activar/desactivar negocio
+  Future<bool> toggleShopStatus(int shopId, bool estado) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final updated = await _shopService.toggleShopStatus(shopId, estado);
+      // Actualizar en la lista
+      final idx = _myShops.indexWhere((s) => s.id == shopId);
+      if (idx != -1) _myShops[idx] = updated;
+      // Actualizar el actual
+      if (_currentShop?.id == shopId) {
+        _currentShop = updated;
+      }
       _isLoading = false;
       notifyListeners();
       return true;

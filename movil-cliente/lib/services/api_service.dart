@@ -3,7 +3,7 @@ import 'dart:convert';
 import '/models/shop.dart';
 
 
-const String baseUrl = "http://10.0.0.6:8000/api/v1"; 
+const String baseUrl = "http://10.0.0.6:8000/api/v1";
 const String apiKey = "25c78a3206e58231c87783cdbc8359584767c6718f1fcaedb9a406c5a6971e4c";
 
 Future<List<Shop>> fetchShops() async {

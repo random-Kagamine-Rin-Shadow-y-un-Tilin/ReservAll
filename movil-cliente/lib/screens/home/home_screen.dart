@@ -72,7 +72,6 @@ class _HomeContent extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            // Fila 1: Restaurante y Barberia
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -82,7 +81,6 @@ class _HomeContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Fila 2: Spa y Belleza
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -92,7 +90,6 @@ class _HomeContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Fila 3: Otro (Centrado)
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -114,7 +111,6 @@ class _HomeContent extends StatelessWidget {
   static Widget _categoryCard(BuildContext context, IconData icon, String title, Color color) {
     return GestureDetector(
       onTap: () {
-        // Pasa exactamente el nombre de la categoría para que la BusinessListScreen filtre correctamente
         Navigator.pushNamed(context, '/business', arguments: title);
       },
       child: Container(

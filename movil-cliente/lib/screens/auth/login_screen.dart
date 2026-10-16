@@ -6,44 +6,41 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF6F1), // Fondo crema
+      backgroundColor: const Color(0xFFFAF6F1), 
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo o título
               Text(
                 'SRLN',
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFE2725B), // Terracota primario
+                  color: Color(0xFFE2725B),
                 ),
               ),
               const SizedBox(height: 40),
 
-              // Campo Email
               TextField(
                 decoration: InputDecoration(
                   labelText: 'Correo electrónico',
-                  labelStyle: const TextStyle(color: Color(0xFF2B2118)), // Texto principal
+                  labelStyle: const TextStyle(color: Color(0xFF2B2118)), 
                   filled: true,
-                  fillColor: const Color(0xFFFFFFFF), // Superficie blanca
+                  fillColor: const Color(0xFFFFFFFF), 
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE2725B)), // Terracota
+                    borderSide: const BorderSide(color: Color(0xFFE2725B)), 
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF2A9D8F)), // Verde salvia
+                    borderSide: const BorderSide(color: Color(0xFF2A9D8F)), 
                   ),
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Campo Password
               TextField(
                 obscureText: true,
                 decoration: InputDecoration(
@@ -63,7 +60,6 @@ class LoginScreen extends StatelessWidget {
               ),
               const SizedBox(height: 30),
 
-              // Botón Login
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE2725B), // Terracota
@@ -83,7 +79,6 @@ class LoginScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // Botón secundario (Registro)
               TextButton(
                 onPressed: () {
                   Navigator.pushNamed(context, '/register');
@@ -91,7 +86,7 @@ class LoginScreen extends StatelessWidget {
                 child: const Text(
                   'Crear cuenta',
                   style: TextStyle(
-                    color: Color(0xFF2A9D8F), // Verde salvia
+                    color: Color(0xFF2A9D8F), 
                     fontWeight: FontWeight.bold,
                   ),
                 ),

@@ -7,6 +7,8 @@ import 'controllers/user_controller.dart';
 import 'services/api_service.dart';
 import 'views/auth/login_screen.dart';
 import 'views/home/home_screen.dart';
+import 'controllers/profesional_controller.dart';
+import 'controllers/service_controller.dart';
 
 void main() {
   ApiService().init();
@@ -20,26 +22,20 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (context) => AuthController(),
-        ),
-        ChangeNotifierProvider(
-          create: (context) => ShopController(),
-        ),
-        ChangeNotifierProvider(
-          create: (context) => UserController(),
-        ),
+        ChangeNotifierProvider(create: (context) => AuthController()),
+        ChangeNotifierProvider(create: (context) => ShopController()),
+        ChangeNotifierProvider(create: (context) => UserController()),
+        ChangeNotifierProvider(create: (_) => ProfesionalController()),
+        ChangeNotifierProvider(create: (_) => ServiceController()),
       ],
       child: MaterialApp(
         title: 'SRNL Back',
-        theme: AppTheme.lightTheme, 
+        theme: AppTheme.lightTheme,
         home: Consumer<AuthController>(
           builder: (context, authController, child) {
             if (authController.isLoading) {
               return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(),
-                ),
+                body: Center(child: CircularProgressIndicator()),
               );
             }
 

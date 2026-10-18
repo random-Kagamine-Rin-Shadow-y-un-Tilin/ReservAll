@@ -21,23 +21,23 @@ class Shop {
     this.fechaCreacion,
   });
 
-  factory Shop.fromJson(Map<String, dynamic> json) {  
-  final shop = Shop(
-    id: json['id'],
-    nombre: json['nombre'] ?? '',
-    descripcion: json['descripcion'] ?? '',
-    imagenNegocio: json['imagen_negocio'],
-    categoriaNegocio: json['categoria_negocio']?.toString(),
-    idCategoria: json['id_categoria'] is int
-        ? json['id_categoria']
-        : int.tryParse(json['id_categoria']?.toString() ?? ''),
-    duenoId: json['dueno_id'],
-    estadoNegocio: json['estado_negocio'] ?? true,
-    fechaCreacion: json['fecha_creacion'],
-  );
-  
-  return shop;
-}
+  factory Shop.fromJson(Map<String, dynamic> json) {
+    final shop = Shop(
+      id: json['id'],
+      nombre: json['nombre'] ?? '',
+      descripcion: json['descripcion'] ?? '',
+      imagenNegocio: json['imagen_negocio'],
+      categoriaNegocio: json['categoria_negocio']?.toString(),
+      idCategoria: json['id_categoria'] is int
+          ? json['id_categoria']
+          : int.tryParse(json['id_categoria']?.toString() ?? ''),
+      duenoId: json['dueno_id'],
+      estadoNegocio: json['estado_negocio'] ?? true,
+      fechaCreacion: json['fecha_creacion'],
+    );
+
+    return shop;
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -115,11 +115,11 @@ class ShopEditRequest {
   });
 
   Map<String, dynamic> toJson() => {
-        'nombre': nombre,
-        'descripcion': descripcion,
-        'imagen_negocio': imagenNegocio ?? 'null',
-        'fk_categoria': fkCategoria,
-      };
+    'nombre': nombre,
+    'descripcion': descripcion,
+    'imagen_negocio': imagenNegocio ?? 'null',
+    'fk_categoria': fkCategoria,
+  };
 }
 
 class ShopContact {
@@ -144,10 +144,10 @@ class ShopContact {
   }
 
   Map<String, dynamic> toJson() => {
-        'id_social': idSocial,
-        'nombre_red': nombreRed,
-        'url': url,
-      };
+    'id_social': idSocial,
+    'nombre_red': nombreRed,
+    'url': url,
+  };
 }
 
 class ShopSchedule {
@@ -181,13 +181,13 @@ class ShopSchedule {
   }
 
   Map<String, dynamic> toJson() => {
-        'id_horario': idHorario,
-        'dia': dia,
-        'hora_apertura': horaApertura,
-        'hora_cierre': horaCierre,
-        'hora_descanso': horaDescanso,
-        'estado_horario': estadoHorario,
-      };
+    'id_horario': idHorario,
+    'dia': dia,
+    'hora_apertura': horaApertura,
+    'hora_cierre': horaCierre,
+    'hora_descanso': horaDescanso,
+    'estado_horario': estadoHorario,
+  };
 }
 
 class ShopFullProfile {
@@ -204,14 +204,25 @@ class ShopFullProfile {
   factory ShopFullProfile.fromJson(Map<String, dynamic> json) {
     return ShopFullProfile(
       general: Shop.fromJson(json['general'] ?? {}),
-      contacts: (json['contacto'] as List?)
+      contacts:
+          (json['contacto'] as List?)
               ?.map((e) => ShopContact.fromJson(e))
               .toList() ??
           [],
-      schedules: (json['horario'] as List?)
+      schedules:
+          (json['horario'] as List?)
               ?.map((e) => ShopSchedule.fromJson(e))
               .toList() ??
           [],
     );
   }
+}
+
+class ShopContactCreateRequest {
+  final String nombreRed;
+  final String url;
+
+  ShopContactCreateRequest({required this.nombreRed, required this.url});
+
+  Map<String, dynamic> toJson() => {'nombre_red': nombreRed, 'url': url};
 }

@@ -67,28 +67,32 @@ class _HomeContent extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Restaurantes, peluquerías, spas y más — todo en un solo lugar, sin llamadas ni esperas.',
+              'Restaurantes, barberías, spas y más — todo en un solo lugar, sin llamadas ni esperas.',
               style: TextStyle(fontSize: 14, color: Color(0xFF7A7267)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
+            // Fila 1: Restaurante y Barberia
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _categoryCard(context, Icons.restaurant, 'Restaurantes', const Color(0xFFE9C46A)),
+                _categoryCard(context, Icons.restaurant, 'Restaurante', const Color(0xFFE9C46A)),
                 const SizedBox(width: 12),
-                _categoryCard(context, Icons.cut, 'Peluquerías', const Color(0xFF2A9D8F)),
+                _categoryCard(context, Icons.cut, 'Barberia', const Color(0xFF2A9D8F)),
               ],
             ),
             const SizedBox(height: 12),
+            // Fila 2: Spa y Belleza
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _categoryCard(context, Icons.spa, 'Spa', const Color(0xFFE2725B)),
                 const SizedBox(width: 12),
-                _categoryCard(context, Icons.brush, 'Uñas', const Color(0xFFE63946)),
+                _categoryCard(context, Icons.brush, 'Belleza', const Color(0xFFE63946)),
               ],
             ),
+            const SizedBox(height: 12),
+            // Fila 3: Otro (Centrado)
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -110,6 +114,7 @@ class _HomeContent extends StatelessWidget {
   static Widget _categoryCard(BuildContext context, IconData icon, String title, Color color) {
     return GestureDetector(
       onTap: () {
+        // Pasa exactamente el nombre de la categoría para que la BusinessListScreen filtre correctamente
         Navigator.pushNamed(context, '/business', arguments: title);
       },
       child: Container(

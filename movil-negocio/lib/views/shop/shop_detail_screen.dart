@@ -8,6 +8,8 @@ import 'edit_contact_screen.dart';
 import 'edit_schedule_screen.dart';
 import 'edit_shop_screen.dart';
 import 'add_contact_screen.dart';
+import 'professionals_screen.dart';
+import 'services_screen.dart';
 
 class ShopDetailScreen extends StatefulWidget {
   final int shopId;
@@ -39,7 +41,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.surface,
         actions: [
-          //  Botón editar negocio
+          // Botón editar negocio
           IconButton(
             icon: const Icon(Icons.edit),
             tooltip: 'Editar negocio',
@@ -56,7 +58,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.error_outline,
                     size: 64,
                     color: AppColors.textSecondary,
@@ -97,7 +99,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                 children: [
                   // ---------- Imagen ----------
                   _buildImage(shop),
-
                   const SizedBox(height: 24),
 
                   // ---------- Nombre ----------
@@ -129,7 +130,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 24),
 
                   // ---------- Descripción ----------
@@ -158,7 +158,51 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 24),
 
+                  // ---------- Accesos Rápidos (Nuevos Módulos) ----------
+                  const Text(
+                    'Gestión del Negocio',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildMenuCard(
+                          icon: Icons.people,
+                          title: 'Profesionales',
+                          color: Colors.blue,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ProfessionalsScreen(shopId: widget.shopId),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildMenuCard(
+                          icon: Icons.design_services,
+                          title: 'Servicios',
+                          color: Colors.purple,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ServicesScreen(shopId: widget.shopId),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
 
                   // ---------- Redes sociales ----------
@@ -169,7 +213,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   _buildContactsList(profile?.contacts ?? []),
-
                   const SizedBox(height: 24),
 
                   // ---------- Horarios ----------
@@ -180,7 +223,10 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   _buildSchedulesList(profile?.schedules ?? []),
+                  const SizedBox(height: 24),
 
+                  // ---------- Estado ----------
+                  _buildStatusCard(shop),
                   const SizedBox(height: 24),
 
                   // ---------- Eliminar negocio ----------
@@ -205,7 +251,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 24),
                 ],
               ),
@@ -226,13 +271,16 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
         borderRadius: BorderRadius.circular(12),
         color: AppColors.surfaceLight,
       ),
-      child: shop.imagenNegocio != null && shop.imagenNegocio!.isNotEmpty
+      child:
+          shop.imagenNegocio != null &&
+              shop.imagenNegocio!.isNotEmpty &&
+              shop.imagenNegocio != 'null'
           ? ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Image.network(
                 shop.imagenNegocio!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(
+                errorBuilder: (_, __, ___) => const Center(
                   child: Icon(
                     Icons.broken_image,
                     size: 64,
@@ -241,13 +289,43 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                 ),
               ),
             )
-          : Center(
+          : const Center(
               child: Icon(
                 Icons.store,
                 size: 64,
                 color: AppColors.textSecondary,
               ),
             ),
+    );
+  }
+
+  Widget _buildMenuCard({
+    required IconData icon,
+    required String title,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 32, color: color),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(fontWeight: FontWeight.w600, color: color),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -287,49 +365,43 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       return _buildEmptyState('Sin redes de contacto registradas');
     }
     return Column(
-      children: contacts
-          .map(
-            (c) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: Icon(
-                  _getSocialIcon(c.nombreRed),
-                  color: AppColors.primary,
-                ),
-                title: Text(
-                  c.nombreRed,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  c.url,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.edit,
-                        size: 20,
-                        color: AppColors.primary,
-                      ),
-                      onPressed: () => _openEditContact(c),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.delete,
-                        size: 20,
-                        color: AppColors.error,
-                      ),
-                      onPressed: () => _confirmDeleteContact(c),
-                    ),
-                  ],
-                ),
-              ),
+      children: contacts.map((c) {
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: Icon(
+              _getSocialIcon(c.nombreRed),
+              color: AppColors.primary,
             ),
-          )
-          .toList(),
+            title: Text(
+              c.nombreRed,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(c.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.edit,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
+                  onPressed: () => _openEditContact(c),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.delete,
+                    size: 20,
+                    color: AppColors.error,
+                  ),
+                  onPressed: () => _confirmDeleteContact(c),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -338,48 +410,43 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       return _buildEmptyState('Sin horarios registrados');
     }
     return Column(
-      children: schedules
-          .map(
-            (s) => Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: const Icon(
-                  Icons.calendar_today,
-                  color: AppColors.primary,
-                ),
-                title: Text(
-                  s.dia[0].toUpperCase() + s.dia.substring(1),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  '${s.horaApertura.substring(0, 5)} - ${s.horaCierre.substring(0, 5)}'
-                  '${s.horaDescanso != null ? " (Descanso: ${s.horaDescanso!.substring(0, 5)})" : ""}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.edit,
-                        size: 20,
-                        color: AppColors.primary,
-                      ),
-                      onPressed: () => _openEditSchedule(s),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.delete,
-                        size: 20,
-                        color: AppColors.error,
-                      ),
-                      onPressed: () => _confirmDeleteSchedule(s),
-                    ),
-                  ],
-                ),
-              ),
+      children: schedules.map((s) {
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: const Icon(Icons.calendar_today, color: AppColors.primary),
+            title: Text(
+              s.dia[0].toUpperCase() + s.dia.substring(1),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-          )
-          .toList(),
+            subtitle: Text(
+              '${s.horaApertura.substring(0, 5)} - ${s.horaCierre.substring(0, 5)}'
+              '${s.horaDescanso != null ? " (Descanso: ${s.horaDescanso!.substring(0, 5)})" : ""}',
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.edit,
+                    size: 20,
+                    color: AppColors.primary,
+                  ),
+                  onPressed: () => _openEditSchedule(s),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.delete,
+                    size: 20,
+                    color: AppColors.error,
+                  ),
+                  onPressed: () => _confirmDeleteSchedule(s),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -529,10 +596,15 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   }
 
   Future<void> _openAddSchedule() async {
-    // TODO: pantalla de agregar horario
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Agregar horario próximamente')),
-    );
+    // final result = await Navigator.push<bool>(
+    //   context,
+    //   MaterialPageRoute(
+    //     builder: (_) => AddScheduleScreen(shopId: widget.shopId),
+    //   ),
+    // );
+    // if (result == true) {
+    //   await _reload();
+    // }
   }
 
   Future<void> _openEditSchedule(ShopSchedule schedule) async {

@@ -1,8 +1,10 @@
 from fastapi import APIRouter
-from app.routers import auth, profile, shop, client
+from app.routers import auth, profile, shop, client, profesional, service
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(auth.router)
 api_v1_router.include_router(profile.router)
 api_v1_router.include_router(shop.router)
 api_v1_router.include_router(client.router)
+api_v1_router.include_router(profesional.router)
+api_v1_router.include_router(service.router)

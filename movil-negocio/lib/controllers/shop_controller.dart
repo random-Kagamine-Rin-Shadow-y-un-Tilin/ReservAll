@@ -99,6 +99,29 @@ class ShopController extends ChangeNotifier {
     }
   }
 
+  // HU_08: Registrar contacto
+  Future<bool> addContact(int shopId, ShopContactCreateRequest request) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.addContact(shopId, request);
+      // Recargar el perfil completo para que aparezca la nueva red
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Editar contacto
   Future<bool> editContact(int shopId, int contactId, String url) async {
     _isLoading = true;
     _errorMessage = null;

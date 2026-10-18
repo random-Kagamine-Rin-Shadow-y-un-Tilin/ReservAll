@@ -7,6 +7,7 @@ import '../widgets/loading_widget.dart';
 import 'edit_contact_screen.dart';
 import 'edit_schedule_screen.dart';
 import 'edit_shop_screen.dart';
+import 'add_contact_screen.dart';
 
 class ShopDetailScreen extends StatefulWidget {
   final int shopId;
@@ -483,10 +484,15 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   }
 
   Future<void> _openAddContact() async {
-    // TODO: pantalla de agregar contacto
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Agregar contacto próximamente')),
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddContactScreen(shopId: widget.shopId),
+      ),
     );
+    if (result == true) {
+      await _reload();
+    }
   }
 
   Future<void> _openEditContact(ShopContact contact) async {

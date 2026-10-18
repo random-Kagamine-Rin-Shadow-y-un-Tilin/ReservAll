@@ -213,6 +213,37 @@ class ShopService {
     }
   }
 
+  // HU_08: Registrar contacto
+  Future<ShopContact> addContact(
+    int shopId,
+    ShopContactCreateRequest request,
+  ) async {
+    try {
+      final response = await _apiService.post(
+        '/shop/register-contact/$shopId',
+        body: request.toJson(),
+        requiresAuth: true,
+      );
+
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        if (response.data == null) {
+          throw Exception('Respuesta vacía del servidor');
+        }
+        if (response.data is! Map<String, dynamic>) {
+          throw Exception('Formato de respuesta inválido');
+        }
+        return ShopContact.fromJson(response.data as Map<String, dynamic>);
+      } else {
+        final errorData = response.data as Map<String, dynamic>?;
+        throw Exception(errorData?['detail'] ?? 'Error al agregar contacto');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<ShopContact> editContact(int shopId, int contactId, String url) async {
     try {
       final response = await _apiService.put(

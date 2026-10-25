@@ -1,8 +1,86 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '/models/shop.dart';
+import '/services/api_service.dart';
 
-class BusinessDetailScreen extends StatelessWidget {
+class BusinessDetailScreen extends StatefulWidget {
   const BusinessDetailScreen({super.key});
+
+  @override
+  State<BusinessDetailScreen> createState() => _BusinessDetailScreenState();
+}
+
+class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
+  bool isFavorite = false;
+
+  String _getImageUrl(dynamic rawImage) {
+    if (rawImage == null) return '';
+    String img = rawImage.toString().trim();
+    if (img.isEmpty || img == 'null') return '';
+    if (img.startsWith("http://") || img.startsWith("https://")) {
+      return img;
+    }
+    if (img.startsWith("/")) {
+      return "http://10.0.0.6:8000$img";
+    }
+    return "http://10.0.0.6:8000/static/$img";
+  }
+
+  Future<void> toggleFavorite(dynamic shopId) async {
+    setState(() {
+      isFavorite = !isFavorite;
+    });
+
+    final String message = isFavorite ? "Negocio agregado a favoritos" : "Negocio eliminado de favoritos";
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF2A9D8F),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+
+    try {
+      final endpoint = isFavorite ? "add-favorite" : "remove-favorite";
+      
+      final response = await http.post(
+        Uri.parse("$baseUrl/client/$endpoint"),
+        headers: {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: jsonEncode({
+          "id_negocio": shopId,
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        print("Error Backend Detail Favorites: ${response.statusCode} - ${response.body}");
+        _revertFavoriteState("No se pudo sincronizar con el servidor");
+      }
+    } catch (e) {
+      print("Excepción Detail Favorites: $e");
+      _revertFavoriteState("Error de conexión. Cambio no guardado.");
+    }
+  }
+
+  void _revertFavoriteState(String errorMessage) {
+    if (!mounted) return;
+    setState(() {
+      isFavorite = !isFavorite;
+    });
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(errorMessage),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,11 +89,12 @@ class BusinessDetailScreen extends StatelessWidget {
     String nombre = '';
     String descripcion = '';
     String categoria = 'General';
-    String imagen = '';
+    String rawImagen = '';
     String direccion = 'Ubicación no especificada';
     String horarios = 'Lunes a Sábado: 9:00 AM - 8:00 PM';
     List<dynamic> servicios = [];
     double valoracion = 4.8;
+    dynamic shopId = '';
 
     const Map<int, String> categoryNames = {
       1: "Barberia",
@@ -28,7 +107,8 @@ class BusinessDetailScreen extends StatelessWidget {
     if (args is Shop) {
       nombre = args.nombre;
       descripcion = args.descripcion;
-      imagen = args.imagenNegocio;
+      rawImagen = args.imagenNegocio;
+      shopId = args.id;
 
       if (args.categoriaNegocio.isNotEmpty && args.categoriaNegocio != "null" && args.categoriaNegocio != "General") {
         categoria = args.categoriaNegocio;
@@ -36,11 +116,13 @@ class BusinessDetailScreen extends StatelessWidget {
     } else if (args is Map<String, dynamic>) {
       nombre = args['nombre'] ?? '';
       descripcion = args['descripcion'] ?? '';
-      imagen = args['imagen_negocio'] ?? 'null';
+      rawImagen = args['imagen_negocio'] ?? '';
       direccion = args['direccion'] ?? args['ubicacion'] ?? 'Ubicación no especificada';
       horarios = args['horarios'] ?? args['horario'] ?? 'Lunes a Sábado: 9:00 AM - 8:00 PM';
       servicios = args['servicios'] ?? [];
       valoracion = (args['valoracion'] != null) ? double.tryParse(args['valoracion'].toString()) ?? 4.8 : 4.8;
+      shopId = args['id'] ?? args['id_negocio'] ?? args['idShop'];
+      isFavorite = args['is_favorite'] ?? false;
 
       var rawCatId = args['fk_categoria'] ?? args['id_categoria'] ?? args['categoria_id'];
       if (rawCatId != null) {
@@ -60,8 +142,7 @@ class BusinessDetailScreen extends StatelessWidget {
       }
     }
 
-    if (args is Shop && categoria == 'General') {
-    }
+    final String finalImageUrl = _getImageUrl(rawImagen);
 
     final Color primaryColor = const Color(0xFFE2725B);      
     final Color secondaryColor = const Color(0xFF2A9D8F);    
@@ -77,6 +158,15 @@ class BusinessDetailScreen extends StatelessWidget {
         backgroundColor: primaryColor,
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: isFavorite ? Colors.redAccent.shade100 : Colors.white,
+            ),
+            onPressed: () => toggleFavorite(shopId),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -96,18 +186,19 @@ class BusinessDetailScreen extends StatelessWidget {
                     offset: const Offset(0, 4),
                   )
                 ],
-                image: (imagen != "null" && imagen.isNotEmpty)
-                    ? DecorationImage(
-                        image: imagen.startsWith("http")
-                            ? NetworkImage(imagen)
-                            : NetworkImage("http://10.0.0.6:8000/static/$imagen") as ImageProvider,
-                        fit: BoxFit.cover,
-                      )
-                    : null,
               ),
-              child: (imagen == "null" || imagen.isEmpty)
-                  ? Center(child: Icon(Icons.store, size: 64, color: primaryColor))
-                  : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: finalImageUrl.isNotEmpty
+                    ? Image.network(
+                        finalImageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Center(
+                          child: Icon(Icons.store, size: 64, color: primaryColor),
+                        ),
+                      )
+                    : Center(child: Icon(Icons.store, size: 64, color: primaryColor)),
+              ),
             ),
             const SizedBox(height: 20),
 

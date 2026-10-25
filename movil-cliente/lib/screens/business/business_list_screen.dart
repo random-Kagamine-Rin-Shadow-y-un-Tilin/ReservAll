@@ -24,14 +24,14 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     "Spa",
     "Restaurante",
     "Belleza",
-    "Otro"
+    "Otro",
   ];
 
-  final Color primaryColor = const Color(0xFFE2725B);      
-  final Color secondaryColor = const Color(0xFF2A9D8F);    
-  final Color backgroundColor = const Color(0xFFFAF6F1);   
-  final Color surfaceColor = const Color(0xFFFFFFFF);     
-  final Color textMainColor = const Color(0xFF2B2118);     
+  final Color primaryColor = const Color(0xFFE2725B);
+  final Color secondaryColor = const Color(0xFF2A9D8F);
+  final Color backgroundColor = const Color(0xFFFAF6F1);
+  final Color surfaceColor = const Color(0xFFFFFFFF);
+  final Color textMainColor = const Color(0xFF2B2118);
   final Color textSecondaryColor = const Color(0xFF7A7267);
 
   @override
@@ -40,8 +40,61 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     if (_isFirstLoad) {
       final routeArgs = ModalRoute.of(context)?.settings.arguments as String?;
       selectedCategory = widget.category ?? routeArgs ?? "Todos";
-      fetchShopsList(category: selectedCategory == "Todos" ? null : selectedCategory);
+      fetchShopsList(
+        category: selectedCategory == "Todos" ? null : selectedCategory,
+      );
       _isFirstLoad = false;
+    }
+  }
+
+  // Helper para construir la URL de la imagen sin romper la carga
+  String _getImageUrl(dynamic rawImage) {
+    if (rawImage == null) return '';
+    String img = rawImage.toString().trim();
+    if (img.isEmpty || img == 'null') return '';
+    if (img.startsWith("http://") || img.startsWith("https://")) {
+      return img;
+    }
+    if (img.startsWith("/")) {
+      return "http://10.0.0.6:8000$img";
+    }
+    return "http://10.0.0.6:8000/static/$img";
+  }
+
+  Future<void> toggleFavoriteInList(Map<String, dynamic> shop, int index) async {
+    final dynamic shopId = shop['id'] ?? shop['id_negocio'] ?? shop['idShop'];
+    final bool currentStatus = shop['is_favorite'] ?? false;
+
+    // Actualización optimista de UI
+    setState(() {
+      shops[index]['is_favorite'] = !currentStatus;
+    });
+
+    try {
+      // Declaramos 'endpoint' una sola vez aquí:
+      final endpoint = !currentStatus ? "add-favorite" : "remove-favorite";
+      
+      final response = await http.post(
+        Uri.parse("$baseUrl/$endpoint"), // Ajusta según la ruta real de tu backend FastAPI (ej: "$baseUrl/client/$endpoint" o "$baseUrl/$endpoint")
+        headers: {
+          "accept": "application/json",
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+        },
+        body: jsonEncode({"id_negocio": shopId}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        print("Error Backend (Favorites): ${response.statusCode} - ${response.body}");
+        setState(() {
+          shops[index]['is_favorite'] = currentStatus;
+        });
+      }
+    } catch (e) {
+      print("Excepción en favoritos: $e");
+      setState(() {
+        shops[index]['is_favorite'] = currentStatus;
+      });
     }
   }
 
@@ -49,7 +102,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     setState(() => isLoading = true);
     try {
       final bool isAll = category == null || category == "Todos";
-      
+
       const Map<String, int> categoryIds = {
         "Barberia": 1,
         "Spa": 2,
@@ -58,7 +111,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         "Otro": 5,
       };
 
-     
       String url = "$baseUrl/client/list-shops";
       if (!isAll && category != null) {
         url = "$baseUrl/client/list-shops?category=$category";
@@ -68,7 +120,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         Uri.parse(url),
         headers: {"accept": "application/json", "x-api-key": apiKey},
       );
-      
+
       if (response.statusCode == 200) {
         List<dynamic> allShops = jsonDecode(response.body);
 
@@ -76,25 +128,33 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           final int? targetId = categoryIds[category];
 
           allShops = allShops.where((shop) {
-            var shopCatId = shop['fk_categoria'] ?? 
-                              shop['id_categoria'] ?? 
-                              shop['categoria_id'];
+            var shopCatId =
+                shop['fk_categoria'] ??
+                shop['id_categoria'] ??
+                shop['categoria_id'];
 
-            var shopCatName = shop['categoria'] ?? 
-                                shop['nombre_categoria'] ?? 
-                                shop['category'];
+            var shopCatName =
+                shop['categoria'] ??
+                shop['nombre_categoria'] ??
+                shop['category'];
 
             if (shopCatId is Map) {
               shopCatId = shopCatId['id_categoria'] ?? shopCatId['id'];
             }
             if (shopCatName is Map) {
-              shopCatName = shopCatName['nombre_categoria'] ?? shopCatName['nombre'];
+              shopCatName =
+                  shopCatName['nombre_categoria'] ?? shopCatName['nombre'];
             }
 
-            bool matchesId = targetId != null && shopCatId != null && shopCatId.toString() == targetId.toString();
-            
-            bool matchesName = shopCatName != null && 
-                shopCatName.toString().toLowerCase().trim() == category.toLowerCase().trim();
+            bool matchesId =
+                targetId != null &&
+                shopCatId != null &&
+                shopCatId.toString() == targetId.toString();
+
+            bool matchesName =
+                shopCatName != null &&
+                shopCatName.toString().toLowerCase().trim() ==
+                    category.toLowerCase().trim();
 
             return matchesId || matchesName;
           }).toList();
@@ -134,7 +194,10 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         backgroundColor: primaryColor,
         title: Text(
           selectedCategory == "Todos" ? "Negocios" : selectedCategory!,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
@@ -148,7 +211,11 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
               style: TextStyle(color: textMainColor),
               onChanged: (value) {
                 if (value.trim().isEmpty) {
-                  fetchShopsList(category: selectedCategory == "Todos" ? null : selectedCategory);
+                  fetchShopsList(
+                    category: selectedCategory == "Todos"
+                        ? null
+                        : selectedCategory,
+                  );
                 } else {
                   searchShops(value.trim());
                 }
@@ -168,7 +235,11 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                         icon: Icon(Icons.clear, color: textSecondaryColor),
                         onPressed: () {
                           searchController.clear();
-                          fetchShopsList(category: selectedCategory == "Todos" ? null : selectedCategory);
+                          fetchShopsList(
+                            category: selectedCategory == "Todos"
+                                ? null
+                                : selectedCategory,
+                          );
                         },
                       )
                     : null,
@@ -215,69 +286,99 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
             child: isLoading
                 ? Center(child: CircularProgressIndicator(color: primaryColor))
                 : shops.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Text(
-                            searchController.text.isNotEmpty
-                                ? "No hay resultados referentes a '${searchController.text}'"
-                                : "No hay negocios registrados en la categoría '$selectedCategory'.",
-                            style: TextStyle(fontSize: 16, color: textSecondaryColor),
-                            textAlign: TextAlign.center,
-                          ),
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Text(
+                        searchController.text.isNotEmpty
+                            ? "No hay resultados referentes a '${searchController.text}'"
+                            : "No hay negocios registrados en la categoría '$selectedCategory'.",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: textSecondaryColor,
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: shops.length,
-                        itemBuilder: (context, index) {
-                          final shop = shops[index];
-                          return Card(
-                            color: surfaceColor,
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                shop['nombre'] ?? '',
-                                style: TextStyle(
-                                  color: textMainColor,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                shop['descripcion'] ?? '',
-                                style: TextStyle(color: textSecondaryColor),
-                              ),
-                              leading:
-                                  (shop['imagen_negocio'] != null &&
-                                      shop['imagen_negocio'].toString().startsWith(
-                                        "http",
-                                      ))
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        shop['imagen_negocio'],
-                                        width: 50,
-                                        height: 50,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    )
-                                  : CircleAvatar(
-                                      backgroundColor: primaryColor.withValues(alpha: 0.2),
-                                      child: Icon(Icons.store, color: primaryColor),
-                                    ),
-                              onTap: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/businessDetail',
-                                  arguments: shop,
-                                );
-                              },
-                            ),
-                          );
-                        },
+                        textAlign: TextAlign.center,
                       ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: shops.length,
+                    itemBuilder: (context, index) {
+                      final shop = shops[index];
+                      final bool isFavorite = shop['is_favorite'] ?? false;
+                      final String imageUrl = _getImageUrl(
+                        shop['imagen_negocio'],
+                      );
+
+                      return Card(
+                        color: surfaceColor,
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ListTile(
+                          title: Text(
+                            shop['nombre'] ?? '',
+                            style: TextStyle(
+                              color: textMainColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          subtitle: Text(
+                            shop['descripcion'] ?? '',
+                            style: TextStyle(color: textSecondaryColor),
+                          ),
+                          leading: imageUrl.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    imageUrl,
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            CircleAvatar(
+                                              backgroundColor: primaryColor
+                                                  .withValues(alpha: 0.2),
+                                              child: Icon(
+                                                Icons.store,
+                                                color: primaryColor,
+                                              ),
+                                            ),
+                                  ),
+                                )
+                              : CircleAvatar(
+                                  backgroundColor: primaryColor.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                  child: Icon(Icons.store, color: primaryColor),
+                                ),
+                          trailing: IconButton(
+                            icon: Icon(
+                              isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: isFavorite
+                                  ? Colors.redAccent
+                                  : Colors.grey,
+                            ),
+                            onPressed: () => toggleFavoriteInList(shop, index),
+                          ),
+                          onTap: () {
+                            Navigator.pushNamed(
+                              context,
+                              '/businessDetail',
+                              arguments: shop,
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

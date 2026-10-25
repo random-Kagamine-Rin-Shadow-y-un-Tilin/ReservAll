@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../business/business_list_screen.dart';
 import '../booking/booking_list_screen.dart';
 import '../profile/profile_screen.dart';
+// Asegúrate de importar tu pantalla de favoritos creada previamente:
+import '../favorites/favorites_screen.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,8 +15,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
+  // Se añade FavoritesScreen a la lista de pantallas controladas por el BottomNavigationBar
   final List<Widget> _screens = [
     const _HomeContent(),
+    const FavoritesScreen(), // <-- Pestaña de Favoritos
     const BookingListScreen(), 
     const ProfileScreen(),  
   ];
@@ -40,8 +44,10 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: _onItemTapped,
         selectedItemColor: const Color(0xFFE2725B),
         unselectedItemColor: const Color(0xFF7A7267),
+        type: BottomNavigationBarType.fixed, // Necesario si tienes 4 o más elementos
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Favoritos'), // <-- Ícono en la barra
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Reservas'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
@@ -72,7 +78,6 @@ class _HomeContent extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            // Fila 1: Restaurante y Barberia
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -82,7 +87,6 @@ class _HomeContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Fila 2: Spa y Belleza
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -92,7 +96,6 @@ class _HomeContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Fila 3: Otro (Centrado)
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -114,7 +117,6 @@ class _HomeContent extends StatelessWidget {
   static Widget _categoryCard(BuildContext context, IconData icon, String title, Color color) {
     return GestureDetector(
       onTap: () {
-        // Pasa exactamente el nombre de la categoría para que la BusinessListScreen filtre correctamente
         Navigator.pushNamed(context, '/business', arguments: title);
       },
       child: Container(

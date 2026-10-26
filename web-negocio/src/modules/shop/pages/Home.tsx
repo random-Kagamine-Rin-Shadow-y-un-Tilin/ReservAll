@@ -1,6 +1,5 @@
 import { useAuth } from "../../auth/hooks/useAuth";
 import { OwnerShopList } from "../components/OwnerShopList";
-import { Link } from "react-router-dom";
 
 export function Home(){
     const {user} = useAuth()

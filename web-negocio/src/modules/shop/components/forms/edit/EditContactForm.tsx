@@ -1,19 +1,19 @@
 import { useState } from "react"
-import { useParams } from "react-router-dom"
+import type { FormEvent } from "react"
 
 import type { ShopContactEdit } from "../../../types"
 
 export function EditContactForm({contact, onSuccess}: 
-    {contact: ShopContactEdit, onSuccess: ()=> void}){
+    {contact: ShopContactEdit, onSuccess?: ()=> void}){
     
-    const {shopId} = useParams<{shopId: string}>()
     const[editContact, setEditContact] = useState<ShopContactEdit>(contact)
 
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+    const [loading] = useState(false)
+    const [error] = useState<string | null>(null)
 
-    async function handleSubmit() {
-        
+    async function handleSubmit(event: FormEvent) {
+        event.preventDefault()
+        onSuccess?.()
     }
 
     const socialMedia = [

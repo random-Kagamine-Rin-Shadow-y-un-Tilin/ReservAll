@@ -1,6 +1,6 @@
 import { fetchWithAuth } from "../../lib/api";
 import type { 
-    ShopGeneralInfo, RegisterShopPayload, EditShopPayloal, ShopContactInfo, 
+    ShopGeneralInfo, RegisterShopPayload, EditShopPayload, ShopContactInfo, 
     ShopContactRegister, ShopFullProfileOut, ShopScheduleRegister, ShopSheduleInfo, 
     ShopAddressInfo, ShopAddressRegister,
 } from "./types";
@@ -36,7 +36,7 @@ export async function registerShop(payload: RegisterShopPayload): Promise<ShopGe
     return res.json()
 }
 
-export async function editShop(payload: EditShopPayloal, shopId: number): 
+export async function editShop(payload: EditShopPayload, shopId: number): 
 Promise<ShopGeneralInfo>{
     const res = await fetchWithAuth(`${API_URL}/shop/edit-shop/${shopId}`,{
         method : 'PUT',

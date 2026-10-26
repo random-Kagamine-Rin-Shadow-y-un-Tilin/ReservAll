@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../controllers/service_controller.dart';
 import 'add_service_screen.dart';
-import 'edit_service_screen.dart'; // Importar
+import 'edit_service_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
   final int shopId;
@@ -43,39 +43,80 @@ class _ServicesScreenState extends State<ServicesScreen> {
             itemCount: controller.services.length,
             itemBuilder: (context, index) {
               final s = controller.services[index];
+              final isActive = s.estadoServicio;
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
+                // Si está inactivo, la tarjeta se ve un poco más gris
+                color: isActive ? Colors.white : Colors.grey.shade50,
                 child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   title: Row(
                     children: [
                       Expanded(
-                        child: Text(s.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      if (!s.estadoServicio)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.error.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
+                        child: Text(
+                          s.nombre, 
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            // Texto tachado si está inactivo
+                            decoration: isActive ? null : TextDecoration.lineThrough,
+                            color: isActive ? AppColors.textPrimary : AppColors.textSecondary,
                           ),
-                          child: const Text('Inactivo', style: TextStyle(fontSize: 10, color: AppColors.error)),
                         ),
+                      ),
                     ],
                   ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('\$${s.precio} - ${s.duracionMinutos} min'),
+                      const SizedBox(height: 4),
+                      Text(
+                        '\$${s.precio} - ${s.duracionMinutos} min',
+                        style: TextStyle(color: isActive ? AppColors.textPrimary : AppColors.textSecondary),
+                      ),
                       if (s.profesionales.isNotEmpty)
                         Text(
                           'Con: ${s.profesionales.map((e) => e.nombre).join(", ")}', 
                           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                         ),
+                      const SizedBox(height: 4),
+                      // Etiqueta visual de estado
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isActive ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          isActive ? 'Activo' : 'Inactivo',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: isActive ? AppColors.success : AppColors.error,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      //  SWITCH PARA ACTIVAR/DESACTIVAR (HU_19)
+                      Switch(
+                        value: isActive,
+                        activeColor: AppColors.success,
+                        onChanged: (val) async {
+                          final success = await controller.toggleServiceStatus(widget.shopId, s.idServicio, val);
+                          if (!success && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(controller.errorMessage ?? 'Error al cambiar estado'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                        },
+                      ),
                       // Botón Editar
                       IconButton(
                         icon: const Icon(Icons.edit, color: AppColors.primary),
@@ -90,7 +131,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             ),
                           );
                           if (result == true) {
-                            // Recargar la lista si se editó
                             context.read<ServiceController>().loadServices(widget.shopId);
                           }
                         },

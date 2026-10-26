@@ -76,4 +76,28 @@ class ServiceController extends ChangeNotifier {
       return false;
     }
   }
+  
+  Future<bool> toggleServiceStatus(int shopId, int serviceId, bool nuevoEstado) async {
+    final index = _services.indexWhere((s) => s.idServicio == serviceId);
+    if (index != -1) {
+      final s = _services[index];
+    }
+
+    try {
+      // Usamos el mismo endpoint de edición, pero solo enviamos el estado
+      final request = ServiceEditRequest(estadoServicio: nuevoEstado);
+      final updated = await _service.editService(shopId, serviceId, request);
+      
+      // Actualizar con la respuesta real del servidor
+      if (index != -1) {
+        _services[index] = updated;
+        notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
 }

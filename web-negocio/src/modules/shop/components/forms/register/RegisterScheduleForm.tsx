@@ -48,7 +48,7 @@ export function RegisterScheduleForm(
         setLoading(true)
 
         try{
-            const schedule = await registerSchedule(Number(shopId),{
+            await registerSchedule(Number(shopId),{
                 dia: day,
                 hora_apertura: openHour,
                 hora_cierre: closeHour,

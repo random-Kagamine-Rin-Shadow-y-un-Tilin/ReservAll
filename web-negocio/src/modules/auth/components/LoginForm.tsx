@@ -1,89 +1,117 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  LuArrowRight,
+  LuCircleAlert,
+  LuEye,
+  LuEyeOff,
+  LuLock,
+  LuMail,
+} from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
+import { Button } from "../../../shared/components/ui/Button";
+import { Field, Input } from "../../../shared/components/ui/Field";
 
-import { MdOutlineEmail } from "react-icons/md";
-import { RiLockPasswordLine } from "react-icons/ri";
+export function LoginForm() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-export function LoginForm(){
-    const {login} = useAuth()
-    const navigate = useNavigate()
+  const [correo, setCorreo] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    const [correo, setCorreo] = useState('')
-    const [password, setPassword] = useState('')
-    const [error, setError] = useState<String |null>(null)
-    const [loading, setLoading] = useState(false)
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
 
-    async function handleSubmit(e:FormEvent) {
-        e.preventDefault()
-        setError(null)
-        setLoading(true)
-
-        try{
-            await login({correo, password})
-            navigate('/shop')
-        } catch (err){
-            setError(err instanceof Error ? err.message : 'Error al iniciar sesión.')
-        } finally {
-            setLoading(false)
-        }
+    if (!correo.trim() || !password.trim()) {
+      setError("Ingresa tu correo y contraseña.");
+      return;
     }
 
-    return(
-        <main className="flex justify-center items-center h-screen">
-            <form onSubmit={handleSubmit}
-            className="bg-card p-6 flex flex-col justify-center gap-2 rounded-2xl shadow"
+    setLoading(true);
+    try {
+      await login({ correo: correo.trim(), password });
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No pudimos iniciar sesión.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-soft sm:p-7">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Correo electrónico" htmlFor="login-email" required>
+          <div className="relative">
+            <LuMail
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary-text"
+            />
+            <Input
+              id="login-email"
+              type="email"
+              autoComplete="email"
+              value={correo}
+              onChange={(event) => setCorreo(event.target.value)}
+              className="pl-10"
+              placeholder="tu@negocio.com"
+            />
+          </div>
+        </Field>
+
+        <Field label="Contraseña" htmlFor="login-password" required>
+          <div className="relative">
+            <LuLock
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary-text"
+            />
+            <Input
+              id="login-password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="pl-10 pr-10"
+              placeholder="Tu contraseña"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-text transition-colors hover:text-foreground"
             >
-                <h2  className="font-medium text-center">Iniciar sesión</h2>
+              {showPassword ? <LuEyeOff size={16} /> : <LuEye size={16} />}
+            </button>
+          </div>
+        </Field>
 
-                <div className="flex flex-col gap-2">
-                    <label className="font-medium text-xs">Correo</label>
-                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
-                    border-gray-300 focus:border-highlight">
-                        <MdOutlineEmail/>
-                        <input 
-                        type="email"
-                        value={correo}
-                        onChange={(e)=> setCorreo(e.target.value)} 
-                        className="w-full focus:outline-none"
-                        placeholder="tu@gmail.com"
-                        />
-                    </div>
-                </div>
+        {error && (
+          <div className="flex items-start gap-2 rounded-xl border border-error/20 bg-error-tint px-3.5 py-3 text-xs font-medium text-error">
+            <LuCircleAlert size={15} className="mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
-                <div className="flex flex-col gap-2">
-                    <label className="font-medium text-xs">Contraseña</label>
-                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
-                    border-gray-300 focus:border-highlight">
-                        <RiLockPasswordLine/>
-                        <input 
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full focus:outline-none"
-                        placeholder="● ● ● ● ● ●"
-                        />
-                    </div>
-                </div>
+        <Button
+          type="submit"
+          loading={loading}
+          className="w-full"
+          rightIcon={<LuArrowRight size={16} />}
+        >
+          Entrar al panel
+        </Button>
+      </form>
 
-                {error && 
-                    <label className="text-error font-medium text-xs"
-                    >{error}
-                    </label>
-                }
-
-                <button type="submit" disabled={loading}
-                className="p-2 bg-primary rounded-md text-card hover:bg-[#BF5842]"
-                >
-                    {loading? 'Entrando...': 'Entrar'}
-                </button>
-
-                <div className="flex text-xs justify-center gap-1 font-medium">
-                    <label className="text-gray-500">¿Aún no tienes una cuenta?</label>
-                    <Link to={'/register'} className="text-secondary">Resgitrate aquí</Link>
-                </div>
-            </form>
-        </main>
-    )
+      <p className="mt-6 border-t border-border/70 pt-5 text-center text-xs text-secondary-text">
+        ¿Aún no tienes cuenta?{" "}
+        <Link to="/register" className="font-semibold text-primary hover:underline">
+          Crea tu cuenta de negocio
+        </Link>
+      </p>
+    </div>
+  );
 }

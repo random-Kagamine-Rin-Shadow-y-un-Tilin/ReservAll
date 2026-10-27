@@ -10,12 +10,23 @@ import {
   LuSparkles,
   LuStore,
   LuTrendingUp,
-  LuUsers,
 } from "react-icons/lu";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { getProfessionals, getSchedule, getServices } from "../api";
 import { WEEK_DAYS, categoryLabel, formatTime } from "../constants";
 import type { Professional, Schedule, Service } from "../types";
+import { getReport } from "../../reportes/api";
+import type { Report } from "../../reportes/types";
+import { getReservations } from "../../reservas/api";
+import { statusMeta } from "../../reservas/constants";
+import type { Reservation } from "../../reservas/types";
+import {
+  addDays,
+  formatClock,
+  formatDateShort,
+  formatMoney,
+  todayIso,
+} from "../../../lib/format";
 import { getShopForId } from "../../shop/api";
 import { useShop } from "../../shop/hooks/useShop";
 import type { ShopFullProfileOut } from "../../shop/types";
@@ -53,6 +64,9 @@ export function DashboardPage() {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [schedule, setSchedule] = useState<Schedule[]>([]);
   const [profile, setProfile] = useState<ShopFullProfileOut | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
+  const [todayReservations, setTodayReservations] = useState<Reservation[]>([]);
+  const [upcoming, setUpcoming] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -67,21 +81,58 @@ export function DashboardPage() {
     setLoading(true);
     setError(null);
 
+    const today = todayIso();
+
     Promise.allSettled([
       getServices(selectedShopId),
       getProfessionals(selectedShopId),
       getSchedule(selectedShopId),
       getShopForId(String(selectedShopId)),
+      getReport(selectedShopId, addDays(today, -29), today),
+      getReservations(selectedShopId, {
+        fecha_desde: today,
+        fecha_hasta: addDays(today, 7),
+      }),
     ]).then((results) => {
       if (!active) return;
 
-      const [servicesResult, professionalsResult, scheduleResult, profileResult] = results;
+      const [
+        servicesResult,
+        professionalsResult,
+        scheduleResult,
+        profileResult,
+        reportResult,
+        reservationsResult,
+      ] = results;
 
       if (servicesResult.status === "fulfilled") setServices(servicesResult.value);
       if (professionalsResult.status === "fulfilled")
         setProfessionals(professionalsResult.value);
       if (scheduleResult.status === "fulfilled") setSchedule(scheduleResult.value);
       if (profileResult.status === "fulfilled") setProfile(profileResult.value);
+      if (reportResult.status === "fulfilled") setReport(reportResult.value);
+      if (reservationsResult.status === "fulfilled") {
+        const items = reservationsResult.value.items;
+        setTodayReservations(
+          items.filter(
+            (item) => item.fecha === today && item.estado !== "cancelada",
+          ),
+        );
+        setUpcoming(
+          items
+            .filter(
+              (item) =>
+                item.fecha >= today &&
+                (item.estado === "pendiente" || item.estado === "confirmada"),
+            )
+            .sort((a, b) =>
+              `${a.fecha}T${a.hora_inicio}`.localeCompare(
+                `${b.fecha}T${b.hora_inicio}`,
+              ),
+            )
+            .slice(0, 4),
+        );
+      }
 
       const failures = results.filter((result) => result.status === "rejected");
       if (failures.length === results.length) {
@@ -134,11 +185,9 @@ export function DashboardPage() {
     );
   }
 
-  const activeServices = services.filter((service) => service.estado_servicio);
   const hasImage =
     Boolean(selectedShop.imagen_negocio) && selectedShop.imagen_negocio !== "null";
   const contactsCount = profile?.contacto.length ?? 0;
-
   const checklist = [
     {
       label: "Información general del negocio",
@@ -161,30 +210,35 @@ export function DashboardPage() {
   const completeness = Math.round((completed / checklist.length) * 100);
   const today = todayValue();
 
+  const todayCount = todayReservations.length;
+  const pendingUpcoming = upcoming.filter(
+    (reservation) => reservation.estado === "pendiente",
+  ).length;
+
   const stats = [
     {
-      label: "Servicios activos",
-      value: activeServices.length,
-      hint: `${services.length} registrados`,
-      icon: LuListChecks,
+      label: "Reservas hoy",
+      value: todayCount,
+      hint: `${upcoming.length} próximas en 7 días`,
+      icon: LuCalendar,
       tone: "bg-primary-tint text-primary",
-      to: "/servicios",
+      to: "/reservas",
     },
     {
-      label: "Profesionales",
-      value: professionals.length,
-      hint: "En tu equipo",
-      icon: LuUsers,
-      tone: "bg-secondary-tint text-secondary",
-      to: "/profesionales",
-    },
-    {
-      label: "Días con horario",
-      value: schedule.length,
-      hint: "De 7 días de la semana",
+      label: "Por confirmar",
+      value: pendingUpcoming,
+      hint: "Pendientes en tu agenda",
       icon: LuClock,
       tone: "bg-highlight-tint text-highlight",
-      to: "/horarios",
+      to: "/reservas",
+    },
+    {
+      label: "Ingresos 30 días",
+      value: formatMoney(report?.totales.ingresos ?? 0, true),
+      hint: `${report?.totales.completadas ?? 0} citas completadas`,
+      icon: LuTrendingUp,
+      tone: "bg-secondary-tint text-secondary",
+      to: "/reportes",
     },
     {
       label: "Perfil completo",
@@ -204,9 +258,9 @@ export function DashboardPage() {
         description="Este es el estado de tu negocio y los siguientes pasos para tenerlo listo."
         actions={
           <>
-            <Link to="/negocio">
-              <Button variant="outline" size="sm" leftIcon={<LuStore size={15} />}>
-                Ver mi negocio
+            <Link to="/reportes">
+              <Button variant="outline" size="sm" leftIcon={<LuTrendingUp size={15} />}>
+                Ver reportes
               </Button>
             </Link>
             <Link to="/servicios">
@@ -360,54 +414,67 @@ export function DashboardPage() {
 
           <Card>
             <CardHeader
-              title="Módulos en preparación"
-              subtitle="Estas funciones llegarán en la siguiente fase"
+              title="Próximas reservas"
+              subtitle="Citas pendientes o confirmadas de los próximos 7 días"
               icon={<LuCalendar />}
+              action={
+                <Link
+                  to="/reservas"
+                  className="text-xs font-semibold text-primary hover:underline"
+                >
+                  Ver agenda
+                </Link>
+              }
             />
-            <div className="grid gap-3 p-4 sm:grid-cols-3">
-              {[
-                {
-                  to: "/reservas",
-                  title: "Reservas",
-                  text: "Agenda, confirmaciones y cancelaciones.",
-                  icon: LuCalendar,
-                },
-                {
-                  to: "/clientes",
-                  title: "Clientes",
-                  text: "Historial y seguimiento de tus clientes.",
-                  icon: LuUsers,
-                },
-                {
-                  to: "/reportes",
-                  title: "Reportes",
-                  text: "Ingresos, demanda y rendimiento.",
-                  icon: LuTrendingUp,
-                },
-              ].map((module) => {
-                const Icon = module.icon;
-                return (
-                  <Link
-                    key={module.to}
-                    to={module.to}
-                    className="group rounded-2xl border border-dashed border-border-strong bg-surface/60 p-4 transition-colors hover:border-highlight/60 hover:bg-highlight-tint/30"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="flex size-9 items-center justify-center rounded-xl bg-highlight-tint text-highlight">
-                        <Icon size={17} />
+            {upcoming.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm text-secondary-text">
+                  No tienes citas próximas. Cuando tus clientes reserven,
+                  aparecerán aquí.
+                </p>
+                <Link to="/reservas" className="mt-3 inline-block">
+                  <Button variant="outline" size="sm" leftIcon={<LuCalendar size={14} />}>
+                    Abrir agenda
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {upcoming.map((reservation) => {
+                  const meta = statusMeta(reservation.estado);
+                  return (
+                    <Link
+                      key={reservation.id_reserva}
+                      to="/reservas"
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface/60"
+                    >
+                      <span className="flex w-16 shrink-0 flex-col items-center rounded-xl bg-primary-tint/60 px-2 py-2 text-center">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                          {formatDateShort(reservation.fecha)}
+                        </span>
+                        <span className="text-xs font-semibold text-foreground">
+                          {formatClock(reservation.hora_inicio)}
+                        </span>
                       </span>
-                      <Badge tone="gold">Pronto</Badge>
-                    </div>
-                    <p className="mt-3 font-display text-sm font-bold text-foreground">
-                      {module.title}
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-secondary-text">
-                      {module.text}
-                    </p>
-                  </Link>
-                );
-              })}
-            </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {reservation.cliente_nombre}
+                        </p>
+                        <p className="truncate text-xs text-secondary-text">
+                          {reservation.servicio_nombre}
+                          {reservation.profesional_nombre
+                            ? ` · ${reservation.profesional_nombre}`
+                            : ""}
+                        </p>
+                      </div>
+                      <Badge tone={meta.tone} dot>
+                        {meta.label}
+                      </Badge>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </Card>
         </div>
 
@@ -470,8 +537,8 @@ export function DashboardPage() {
             <div className="space-y-1 p-3">
               {[
                 { to: "/servicios", label: "Agregar un servicio", icon: LuListChecks },
-                { to: "/profesionales", label: "Sumar a tu equipo", icon: LuUsers },
-                { to: "/horarios", label: "Ajustar horarios", icon: LuClock },
+                { to: "/reservas", label: "Revisar la agenda", icon: LuCalendar },
+                { to: "/reportes", label: "Consultar reportes", icon: LuTrendingUp },
                 { to: "/negocio", label: "Editar información", icon: LuStore },
               ].map((action) => {
                 const Icon = action.icon;
@@ -495,20 +562,34 @@ export function DashboardPage() {
               Métricas de reservas
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2">
-              {["Hoy", "Pendientes", "Ingresos"].map((label) => (
+              {[
+                { label: "Hoy", value: todayCount },
+                { label: "Pendientes", value: pendingUpcoming },
+                {
+                  label: "Ingresos 30d",
+                  value: formatMoney(report?.totales.ingresos ?? 0, true),
+                },
+              ].map((item) => (
                 <div
-                  key={label}
-                  className="rounded-xl border border-dashed border-border-strong bg-card/60 px-2 py-3 text-center"
+                  key={item.label}
+                  className="rounded-xl border border-border/70 bg-card px-2 py-3 text-center"
                 >
-                  <p className="font-display text-lg font-extrabold text-secondary-text">—</p>
-                  <p className="text-[10px] font-medium text-secondary-text">{label}</p>
+                  <p className="font-display text-base font-extrabold text-foreground">
+                    {item.value}
+                  </p>
+                  <p className="text-[10px] font-medium text-secondary-text">
+                    {item.label}
+                  </p>
                 </div>
               ))}
             </div>
-            <p className="mt-2 flex items-center gap-1.5 text-[10px] font-medium text-secondary-text">
+            <Link
+              to="/reportes"
+              className="mt-3 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-primary hover:underline"
+            >
               <LuSparkles size={11} className="text-highlight" />
-              Disponible cuando se habiliten las reservas.
-            </p>
+              Ver el reporte completo
+            </Link>
           </div>
         </div>
       </div>

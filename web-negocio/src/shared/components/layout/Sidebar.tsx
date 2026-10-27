@@ -20,7 +20,6 @@ interface NavEntry {
   to: string;
   label: string;
   icon: typeof LuStore;
-  soon?: boolean;
 }
 
 const groups: { label: string; items: NavEntry[] }[] = [
@@ -37,14 +36,14 @@ const groups: { label: string; items: NavEntry[] }[] = [
       { to: "/servicios", label: "Servicios", icon: LuListChecks },
       { to: "/profesionales", label: "Profesionales", icon: LuUsers },
       { to: "/horarios", label: "Horarios", icon: LuClock },
+      { to: "/reservas", label: "Reservas", icon: LuCalendar },
     ],
   },
   {
-    label: "Próximamente",
+    label: "Análisis",
     items: [
-      { to: "/reservas", label: "Reservas", icon: LuCalendar, soon: true },
-      { to: "/clientes", label: "Clientes", icon: LuUser, soon: true },
-      { to: "/reportes", label: "Reportes", icon: LuTrendingUp, soon: true },
+      { to: "/clientes", label: "Clientes", icon: LuUser },
+      { to: "/reportes", label: "Reportes", icon: LuTrendingUp },
     ],
   },
 ];
@@ -124,11 +123,6 @@ export function Sidebar({
                             className={isActive ? "text-primary" : "text-secondary-text"}
                           />
                           <span className="flex-1">{item.label}</span>
-                          {item.soon && (
-                            <span className="rounded-full bg-highlight-tint px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-highlight">
-                              Pronto
-                            </span>
-                          )}
                           {isActive && <LuChevronRight size={14} />}
                         </>
                       )}
@@ -180,7 +174,7 @@ export function Sidebar({
 
           <p className="mt-3 flex items-center justify-center gap-1.5 text-[10px] font-medium text-secondary-text/80">
             <LuSparkles size={11} />
-            ReservAll · Fase 1
+            ReservAll · Fase 2
           </p>
         </div>
       </aside>

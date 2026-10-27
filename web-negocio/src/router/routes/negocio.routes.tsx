@@ -2,14 +2,12 @@ import { Navigate, Route } from "react-router-dom";
 import { AccountPage } from "../../modules/negocio/pages/AccountPage";
 import { BusinessProfilePage } from "../../modules/negocio/pages/BusinessProfilePage";
 import { DashboardPage } from "../../modules/negocio/pages/DashboardPage";
-import {
-  ClientsPage,
-  ReportsPage,
-  ReservationsPage,
-} from "../../modules/negocio/pages/PlaceholderPages";
 import { ProfessionalsPage } from "../../modules/negocio/pages/ProfessionalsPage";
 import { SchedulesPage } from "../../modules/negocio/pages/SchedulesPage";
 import { ServicesPage } from "../../modules/negocio/pages/ServicesPage";
+import { ReservationsPage } from "../../modules/reservas/pages/ReservationsPage";
+import { ClientsPage } from "../../modules/clientes/pages/ClientsPage";
+import { ReportsPage } from "../../modules/reportes/pages/ReportsPage";
 import { RegisterShopPage } from "../../modules/shop/pages/RegisterShopPage";
 
 export const negocioRoutes = (

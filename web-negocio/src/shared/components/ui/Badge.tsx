@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type BadgeTone = "primary" | "secondary" | "gold" | "neutral" | "success" | "danger";
+export type BadgeTone = "primary" | "secondary" | "gold" | "neutral" | "success" | "danger";
 
 const tones: Record<BadgeTone, string> = {
   primary: "bg-primary-tint text-primary",

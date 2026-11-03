@@ -102,6 +102,8 @@ __pycache__/
 # C extensions
 *.so
 
+AGENTS.md
+
 # Distribution / packaging
 .Python
 develop-eggs/

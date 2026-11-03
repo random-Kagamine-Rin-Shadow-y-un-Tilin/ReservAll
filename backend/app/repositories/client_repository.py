@@ -70,17 +70,19 @@ async def get_negocio_by_id(pool: asyncpg.Pool, negocio_id: int):
 #Obtener horarios de un negocio para un día específico
 async def get_horarios_by_negocio_dia(pool: asyncpg.Pool, negocio_id: int, dia: str):
     query = """
-        SELECT  n.id, n.dueno_id, n.nombre, n.descripcion, n.imagen_negocio, c.nombre_categoria as categoria_negocio,
-        n.estado_negocio, h.id_horario, h.dia, h.hora_apertura, h.hora_cierre, h.estado_horario,
-        ho.id_hora, ho.hora_inicio, ho.hora_fin, ho.estado_hora
+        SELECT
+            n.id, n.dueno_id, n.nombre, n.descripcion, n.imagen_negocio,
+            c.nombre_categoria AS categoria_negocio, n.estado_negocio,
+            h.id_horario, h.dia, h.hora_apertura, h.hora_cierre,
+            h.hora_descanso, h.estado_horario
         FROM negocios AS n
-        INNER JOIN categorias AS c ON id_categoria = fk_categoria
+        INNER JOIN categorias AS c ON c.id_categoria = n.fk_categoria
         INNER JOIN horarios AS h ON h.negocio_id = n.id
-        INNER JOIN horas AS ho ON ho.horario_id = h.id_horario
-        WHERE n.id = $1 
-            AND n.estado_negocio = true AND h.estado_horario = true 
-            AND ho.estado_hora = true AND LOWER(h.dia) = LOWER($2)
-        ORDER BY ho.hora_inicio
+        WHERE n.id = $1
+            AND n.estado_negocio = true
+            AND h.estado_horario = true
+            AND LOWER(h.dia::text) = LOWER($2)
+        ORDER BY h.hora_apertura
     """
     async with pool.acquire() as conn:
         return await conn.fetch(query, negocio_id, dia)
@@ -88,14 +90,12 @@ async def get_horarios_by_negocio_dia(pool: asyncpg.Pool, negocio_id: int, dia: 
 # Obtener horarios libres para un negocio en una fecha específica
 async def get_reservas_by_negocio_fecha(pool: asyncpg.Pool, negocio_id: int, fecha: date):
     query = """
-        SELECT 
-            r.id_reserva, r.cliente_id, r.servicios_id, r.fecha,
-            r.hora_inicio, s.duracion_minutos, r.estado, r.fecha_creacion
+        SELECT
+            r.id_reserva, r.cliente_id, r.servicio_id, r.fecha,
+            r.hora_inicio, r.hora_fin, s.duracion_minutos, r.estado, r.fecha_creacion
         FROM reservas AS r
-        INNER JOIN servicios AS s ON s.id_servicio = r.servicios_id
-        WHERE r.servicios_id IN (
-            SELECT id_servicio FROM servicios WHERE negocio_id = $1
-        )
+        INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
+        WHERE s.negocio_id = $1
         AND r.fecha = $2 AND r.estado IN ('pendiente', 'confirmada')
     """
     async with pool.acquire() as conn:
@@ -103,21 +103,19 @@ async def get_reservas_by_negocio_fecha(pool: asyncpg.Pool, negocio_id: int, fec
 
 # Verificar si un horario específico está reservado
 async def get_reservas_by_negocio_fecha_hora(
-    pool: asyncpg.Pool, 
-    negocio_id: int, 
+    pool: asyncpg.Pool,
+    negocio_id: int,
     fecha: date,
     hora_inicio: time
 ):
     query = """
-        SELECT 
-            r.id_reserva, r.cliente_id, r.servicios_id, r.fecha, 
+        SELECT
+            r.id_reserva, r.cliente_id, r.servicio_id, r.fecha,
             r.hora_inicio, s.duracion_minutos, r.estado
         FROM reservas AS r
-        INNER JOIN servicios AS s ON s.id_servicio = r.servicios_id
-        WHERE r.servicios_id IN (
-            SELECT id_servicio FROM servicios WHERE negocio_id = $1
-        )
-        AND r.fecha = $2 
+        INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
+        WHERE s.negocio_id = $1
+        AND r.fecha = $2
         AND r.hora_inicio = $3
         AND r.estado IN ('pendiente', 'confirmada')
     """
@@ -153,29 +151,31 @@ async def create_reserva(
     cliente_id: int,
     servicio_id: int,
     fecha: date,
-    hora_inicio: time
+    hora_inicio: time,
+    hora_fin: time
 ):
     query = """
         INSERT INTO reservas (
-            clientes_id, servicios_id, fecha, hora_inicio, estado, fecha_creacion
-        ) VALUES ($1, $2, $3, $4, 'pendiente', NOW())
-        RETURNING id_reserva, clientes_id, servicios_id, fecha, hora_inicio, estado, fecha_creacion
+            cliente_id, servicio_id, fecha, hora_inicio, hora_fin, estado, fecha_creacion
+        ) VALUES ($1, $2, $3, $4, $5, 'pendiente', NOW())
+        RETURNING id_reserva, cliente_id, servicio_id, fecha, hora_inicio, hora_fin,
+                  estado, fecha_creacion
     """
     async with pool.acquire() as conn:
-        return await conn.fetchrow(query, cliente_id, servicio_id, fecha, hora_inicio)
+        return await conn.fetchrow(
+            query, cliente_id, servicio_id, fecha, hora_inicio, hora_fin
+        )
 
 # Obtener todos los horarios de un negocio
 async def get_horarios_by_negocio(pool: asyncpg.Pool, negocio_id: int):
     query = """
-        SELECT 
+        SELECT
             h.id_horario, h.negocio_id, h.dia, h.hora_apertura, h.hora_cierre,
-            h.estado_horario, ho.id_hora, ho.hora_inicio, ho.hora_fin, ho.estado_hora
+            h.hora_descanso, h.estado_horario
         FROM horarios AS h
-        INNER JOIN horas AS ho ON ho.horario_id = h.id_horario
-        WHERE h.negocio_id = $1 
-            AND h.estado_horario = true 
-            AND ho.estado_hora = true
-        ORDER BY h.dia, ho.hora_inicio
+        WHERE h.negocio_id = $1
+            AND h.estado_horario = true
+        ORDER BY h.dia, h.hora_apertura
     """
     async with pool.acquire() as conn:
         return await conn.fetch(query, negocio_id)

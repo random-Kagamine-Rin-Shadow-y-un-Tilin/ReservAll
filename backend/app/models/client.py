@@ -70,11 +70,11 @@ class AvailableTimesResponse(BaseModel):
     
 # Modelo para crear reserva
 class CreateReservationRequest(BaseModel):
-    cliente_id: int
     servicio_id: int
     fecha: date
     hora_inicio: time
-    hora_fin: time
+    cliente_id: Optional[int] = None
+    hora_fin: Optional[time] = None
 
 # Modelo para respuesta de reserva
 class ReservationResponse(BaseModel):
@@ -83,6 +83,7 @@ class ReservationResponse(BaseModel):
     servicio_id: int
     fecha: date
     hora_inicio: time
+    hora_fin: Optional[time] = None
     estado: EstadoReserva
     fecha_creacion: datetime
 

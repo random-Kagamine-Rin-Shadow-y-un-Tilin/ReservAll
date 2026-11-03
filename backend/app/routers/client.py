@@ -92,7 +92,7 @@ async def create_reservation(
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
     # El cliente_id se obtiene del usuario autenticado
-    cliente_id = current_user['id']  # Asumiendo que el usuario autenticado es el cliente
+    cliente_id = int(current_user["sub"])
     
     return await client_service.create_reservation(
         pool,

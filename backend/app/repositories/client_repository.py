@@ -88,18 +88,33 @@ async def get_horarios_by_negocio_dia(pool: asyncpg.Pool, negocio_id: int, dia: 
         return await conn.fetch(query, negocio_id, dia)
 
 # Obtener horarios libres para un negocio en una fecha específica
-async def get_reservas_by_negocio_fecha(pool: asyncpg.Pool, negocio_id: int, fecha: date):
+async def get_reservas_by_negocio_fecha(
+    pool: asyncpg.Pool,
+    negocio_id: int,
+    fecha: date,
+    profesional_id: Optional[int] = None,
+):
     query = """
         SELECT
             r.id_reserva, r.cliente_id, r.servicio_id, r.fecha,
-            r.hora_inicio, r.hora_fin, s.duracion_minutos, r.estado, r.fecha_creacion
+            r.hora_inicio, r.hora_fin, s.duracion_minutos, r.estado,
+            r.fecha_creacion, r.profesional_id
         FROM reservas AS r
         INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
         WHERE s.negocio_id = $1
         AND r.fecha = $2 AND r.estado IN ('pendiente', 'confirmada')
     """
+    params: list[object] = [negocio_id, fecha]
+    if profesional_id is not None:
+        params.append(profesional_id)
+        query += (
+            f" AND (r.profesional_id = ${len(params)}"
+            " OR r.profesional_id IS NULL)"
+        )
+    query += " ORDER BY r.hora_inicio"
+
     async with pool.acquire() as conn:
-        return await conn.fetch(query, negocio_id, fecha)
+        return await conn.fetch(query, *params)
 
 # Verificar si un horario específico está reservado
 async def get_reservas_by_negocio_fecha_hora(
@@ -129,6 +144,7 @@ async def get_servicios_by_negocio(pool: asyncpg.Pool, negocio_id: int):
             id_servicio, negocio_id, nombre, duracion_minutos, precio
         FROM servicios
         WHERE negocio_id = $1
+          AND estado_servicio = true
         ORDER BY nombre
     """
     async with pool.acquire() as conn:
@@ -138,7 +154,8 @@ async def get_servicios_by_negocio(pool: asyncpg.Pool, negocio_id: int):
 async def get_servicio_by_id(pool: asyncpg.Pool, servicio_id: int):
     query = """
         SELECT 
-            id_servicio, negocio_id, nombre, duracion_minutos, precio
+            id_servicio, negocio_id, nombre, duracion_minutos, precio,
+            estado_servicio
         FROM servicios
         WHERE id_servicio = $1
     """
@@ -152,19 +169,135 @@ async def create_reserva(
     servicio_id: int,
     fecha: date,
     hora_inicio: time,
-    hora_fin: time
+    hora_fin: time,
+    profesional_id: Optional[int] = None,
 ):
     query = """
         INSERT INTO reservas (
-            cliente_id, servicio_id, fecha, hora_inicio, hora_fin, estado, fecha_creacion
-        ) VALUES ($1, $2, $3, $4, $5, 'pendiente', NOW())
-        RETURNING id_reserva, cliente_id, servicio_id, fecha, hora_inicio, hora_fin,
-                  estado, fecha_creacion
+            cliente_id, servicio_id, fecha, hora_inicio, hora_fin, estado,
+            fecha_creacion, profesional_id
+        ) VALUES ($1, $2, $3, $4, $5, 'pendiente', NOW(), $6)
+        RETURNING id_reserva, cliente_id, servicio_id, fecha, hora_inicio,
+                  hora_fin, estado, fecha_creacion, profesional_id
     """
     async with pool.acquire() as conn:
         return await conn.fetchrow(
-            query, cliente_id, servicio_id, fecha, hora_inicio, hora_fin
+            query,
+            cliente_id,
+            servicio_id,
+            fecha,
+            hora_inicio,
+            hora_fin,
+            profesional_id,
         )
+
+
+async def create_reserva_atomic(
+    pool: asyncpg.Pool,
+    negocio_id: int,
+    cliente_id: int,
+    servicio_id: int,
+    fecha: date,
+    hora_inicio: time,
+    hora_fin: time,
+    profesional_id: Optional[int] = None,
+):
+    """Inserta la reserva solo si el espacio sigue libre.
+
+    Se toma un lock por negocio para evitar que dos peticiones simultáneas
+    pasen la validación y creen reservas duplicadas. La comprobación de
+    solapamientos y la inserción ocurren en la misma transacción.
+    """
+
+    query = """
+        WITH lock AS (
+            SELECT pg_advisory_xact_lock($1::bigint) AS acquired
+        )
+        INSERT INTO reservas (
+            cliente_id, servicio_id, fecha, hora_inicio, hora_fin, estado,
+            fecha_creacion, profesional_id
+        )
+        SELECT $2, $3, $4, $5, $6, 'pendiente', NOW(), $7
+        FROM lock
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM reservas AS r
+            INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
+            WHERE s.negocio_id = $1::bigint
+              AND r.fecha = $4
+              AND r.estado IN ('pendiente', 'confirmada')
+              AND r.hora_inicio < $6
+              AND COALESCE(
+                    r.hora_fin,
+                    r.hora_inicio + make_interval(mins => s.duracion_minutos)
+                  ) > $5
+              AND ($7::int IS NULL OR r.profesional_id = $7 OR r.profesional_id IS NULL)
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM bloqueos_agenda AS b
+            WHERE b.negocio_id = $1::bigint
+              AND b.fecha = $4
+              AND (
+                    b.hora_inicio IS NULL
+                    OR (b.hora_inicio < $6 AND b.hora_fin > $5)
+                  )
+        )
+        RETURNING id_reserva, cliente_id, servicio_id, fecha, hora_inicio,
+                  hora_fin, estado, fecha_creacion, profesional_id
+    """
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            return await conn.fetchrow(
+                query,
+                negocio_id,
+                cliente_id,
+                servicio_id,
+                fecha,
+                hora_inicio,
+                hora_fin,
+                profesional_id,
+            )
+
+
+# Profesionales --------------------------------------------------------------
+async def get_profesional_by_id(pool: asyncpg.Pool, profesional_id: int):
+    query = """
+        SELECT id_profesional, negocio_id, nombre, especialidad, activo
+        FROM profesionales
+        WHERE id_profesional = $1
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, profesional_id)
+
+
+async def get_profesionales_by_negocio(pool: asyncpg.Pool, negocio_id: int):
+    query = """
+        SELECT id_profesional, negocio_id, nombre, especialidad, activo
+        FROM profesionales
+        WHERE negocio_id = $1
+          AND activo = true
+        ORDER BY nombre
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(query, negocio_id)
+
+
+async def get_profesionales_for_service(
+    pool: asyncpg.Pool, servicio_id: int
+):
+    query = """
+        SELECT p.id_profesional, p.negocio_id, p.nombre, p.especialidad,
+               p.activo
+        FROM profesionales AS p
+        INNER JOIN servicios_profesionales AS sp
+            ON sp.profesional_id = p.id_profesional
+        WHERE sp.servicio_id = $1
+          AND p.activo = true
+        ORDER BY p.nombre
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(query, servicio_id)
 
 # Obtener todos los horarios de un negocio
 async def get_horarios_by_negocio(pool: asyncpg.Pool, negocio_id: int):

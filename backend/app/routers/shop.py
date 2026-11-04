@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query, status
 from app.core.dependencies import get_db_pool, verify_api_key, get_current_user
 from app.models.shop import ShopRegister, ShopOut, ShopFullProfileOut, ShopEdit, ShopStatusUpdate
 from app.models.shop_contact import ShopContactRegister, ShopContactOut, ShopContactUpdate
@@ -109,9 +109,14 @@ async def add_contact(
 @router.get("/get-schedule/{shop_id}", response_model= list[ShopScheduleOut])
 async def get_schedule_by_shop(
     shop_id: int,
+    include_inactive: bool = Query(
+        True, description="Incluye días desactivados (vista del propietario)"
+    ),
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
-    schedule = await shop_service.get_weekly_schedule(pool, shop_id)
+    schedule = await shop_service.get_weekly_schedule(
+        pool, shop_id, include_inactive=include_inactive
+    )
     return [dict(sche) for sche in schedule]
 
 
@@ -126,8 +131,8 @@ async def add_schedule(
         pool, 
         shop_id, 
         data, 
-        int(current_user["sub"],
-    ))
+        int(current_user["sub"]),
+    )
     
     return dict(schedule)
 

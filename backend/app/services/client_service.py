@@ -1,11 +1,27 @@
 from fastapi import HTTPException, status
-from app.models.client import ShopView, ShopSchedules, AvailableTimes, AvailableTimesResponse, DiaSemana, ReservationResponse, ServiceView
+from app.models.client import (
+    ShopView,
+    AvailableTimes,
+    AvailableTimesResponse,
+    DiaSemana,
+    ReservationResponse,
+    ServiceView,
+)
 from app.repositories import client_repository as repo
-from typing import Optional, List, Dict, Any  # Agregar Dict y Any
-from datetime import date, time
+from app.repositories import agenda_repository as agenda_repo
+from app.core.schedule_utils import (
+    build_slots,
+    day_for_date,
+    overlaps,
+    to_minutes,
+    to_time,
+)
+from app.services import agenda_service
+from typing import Optional, List
+from datetime import date, datetime, time
 import asyncpg
 
-# mapeo de dias de la semana
+# mapeo de dias de la semana (compatibilidad con código existente)
 DIAS_MAP = {
     0: DiaSemana.LUNES,
     1: DiaSemana.MARTES,
@@ -13,7 +29,7 @@ DIAS_MAP = {
     3: DiaSemana.JUEVES,
     4: DiaSemana.VIERNES,
     5: DiaSemana.SABADO,
-    6: DiaSemana.DOMINGO
+    6: DiaSemana.DOMINGO,
 }
 
 # Listado normal
@@ -74,161 +90,294 @@ async def search_shops(pool: asyncpg.Pool, search_term: str):
         )
     return [dict(shop) for shop in shops]
 
-#Obtener datos de un negocio
+
+# Disponibilidad --------------------------------------------------------------
 SLOT_MINUTES = 30
 BREAK_MINUTES = 60
 
 
-def _to_minutes(value: time) -> int:
-    return value.hour * 60 + value.minute
+def _validate_slot_params(intervalo_minutos: int, descanso_minutos: int) -> None:
+    if intervalo_minutos < 5 or intervalo_minutos > 240:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El intervalo de atención debe estar entre 5 y 240 minutos.",
+        )
+    if descanso_minutos < 0 or descanso_minutos > 240:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La duración del descanso debe estar entre 0 y 240 minutos.",
+        )
 
 
-def _to_time(total_minutes: int) -> time:
-    total_minutes %= 24 * 60
-    return time(hour=total_minutes // 60, minute=total_minutes % 60)
+def _reservation_intervals(reservas) -> list[tuple[int, int]]:
+    intervals: list[tuple[int, int]] = []
+    for reserva in reservas:
+        inicio = to_minutes(reserva["hora_inicio"])
+        if reserva["hora_fin"] is not None:
+            fin = to_minutes(reserva["hora_fin"])
+        else:
+            fin = inicio + (reserva["duracion_minutos"] or SLOT_MINUTES)
+        intervals.append((inicio, fin))
+    return intervals
 
 
-def _overlaps(start: int, end: int, other_start: int, other_end: int) -> bool:
-    return start < other_end and end > other_start
+def _time_block_intervals(bloqueos) -> list[tuple[int, int]]:
+    intervals: list[tuple[int, int]] = []
+    for bloqueo in bloqueos:
+        if bloqueo["hora_inicio"] is None or bloqueo["hora_fin"] is None:
+            continue
+        intervals.append(
+            (
+                to_minutes(bloqueo["hora_inicio"]),
+                to_minutes(bloqueo["hora_fin"]),
+            )
+        )
+    return intervals
+
+
+def _map_slots(horario, slots) -> list[AvailableTimes]:
+    return [
+        AvailableTimes(
+            id_horario=horario["id_horario"],
+            dia=horario["dia"],
+            hora_inicio=slot.hora_inicio,
+            hora_fin=slot.hora_fin,
+            disponible=slot.disponible,
+            motivo=slot.motivo,
+        )
+        for slot in slots
+    ]
+
+
+async def _validate_professional_for_service(
+    pool: asyncpg.Pool,
+    negocio_id: int,
+    servicio_id: int,
+    profesional_id: int,
+) -> None:
+    profesional = await repo.get_profesional_by_id(pool, profesional_id)
+    if not profesional or not profesional["activo"]:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Profesional no encontrado o inactivo.",
+        )
+    if profesional["negocio_id"] != negocio_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El profesional no pertenece a este negocio.",
+        )
+
+    vinculados = await repo.get_profesionales_for_service(pool, servicio_id)
+    if vinculados and not any(
+        item["id_profesional"] == profesional_id for item in vinculados
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El profesional seleccionado no ofrece este servicio.",
+        )
 
 
 async def get_available_times(
     pool: asyncpg.Pool,
     negocio_id: int,
     fecha: date,
-    servicio_id: Optional[int] = None
+    servicio_id: Optional[int] = None,
+    profesional_id: Optional[int] = None,
+    intervalo_minutos: int = SLOT_MINUTES,
+    descanso_minutos: int = BREAK_MINUTES,
 ) -> AvailableTimesResponse:
-    # 1. Verificar que el negocio existe
+    _validate_slot_params(intervalo_minutos, descanso_minutos)
+
+    # 1. Verificar que el negocio existe y está activo
     negocio = await repo.get_negocio_by_id(pool, negocio_id)
     if not negocio:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="El negocio no existe o no está activo"
+            detail="El negocio no existe o no está activo",
         )
 
-    # 2. Obtener el día de la semana en español
-    dia_numero = fecha.weekday()
-    dia_nombre = DIAS_MAP.get(dia_numero)
-    if not dia_nombre:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Día no válido"
-        )
+    # 2. Obtener el día de la semana
+    dia_nombre = day_for_date(fecha)
 
-    # 3. Obtener horarios del negocio para ese día
-    horarios = await repo.get_horarios_by_negocio_dia(pool, negocio_id, dia_nombre)
-    if not horarios:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No hay horarios disponibles para el negocio en {dia_nombre.value}"
-        )
-
-    # 4. Servicio solicitado (define la duración de cada espacio)
+    # 3. Servicio solicitado (define la duración de cada espacio)
     duracion = SLOT_MINUTES
     if servicio_id is not None:
         servicio = await repo.get_servicio_by_id(pool, servicio_id)
         if not servicio:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="El servicio no existe"
+                detail="El servicio no existe",
             )
-        if servicio['negocio_id'] != negocio_id:
+        if servicio["negocio_id"] != negocio_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El servicio no pertenece a este negocio"
+                detail="El servicio no pertenece a este negocio",
             )
-        duracion = servicio['duracion_minutos'] or SLOT_MINUTES
+        if not servicio.get("estado_servicio", True):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El servicio no está disponible",
+            )
+        duracion = servicio["duracion_minutos"] or SLOT_MINUTES
+
+    if profesional_id is not None:
+        if servicio_id is None:
+            profesional = await repo.get_profesional_by_id(pool, profesional_id)
+            if (
+                not profesional
+                or not profesional["activo"]
+                or profesional["negocio_id"] != negocio_id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Profesional no encontrado o inactivo en este negocio",
+                )
+        else:
+            await _validate_professional_for_service(
+                pool, negocio_id, servicio_id, profesional_id
+            )
+
+    # 4. Horarios del negocio para ese día
+    horarios = await repo.get_horarios_by_negocio_dia(pool, negocio_id, dia_nombre)
+    bloqueos = await agenda_repo.get_blocks_by_date(pool, negocio_id, fecha)
+    full_day_block = agenda_service.is_full_day_blocked(bloqueos)
+
+    if not horarios:
+        if full_day_block:
+            return AvailableTimesResponse(
+                negocio_id=negocio_id,
+                nombre_negocio=negocio["nombre"],
+                fecha=fecha,
+                horarios_disponibles=[],
+                bloqueado=True,
+                motivo_bloqueo=agenda_service.block_reason_for_date(bloqueos),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No hay horarios disponibles para el negocio en {dia_nombre}",
+        )
+
+    if full_day_block:
+        return AvailableTimesResponse(
+            negocio_id=negocio_id,
+            nombre_negocio=negocio["nombre"],
+            fecha=fecha,
+            horarios_disponibles=[],
+            bloqueado=True,
+            motivo_bloqueo=agenda_service.block_reason_for_date(bloqueos),
+        )
 
     # 5. Reservas existentes para esa fecha
-    reservas = await repo.get_reservas_by_negocio_fecha(pool, negocio_id, fecha)
-    ocupados = []
-    for reserva in reservas:
-        inicio = _to_minutes(reserva['hora_inicio'])
-        if reserva['hora_fin'] is not None:
-            fin = _to_minutes(reserva['hora_fin'])
-        else:
-            fin = inicio + (reserva['duracion_minutos'] or SLOT_MINUTES)
-        ocupados.append((inicio, fin))
+    reservas = await repo.get_reservas_by_negocio_fecha(
+        pool, negocio_id, fecha, profesional_id
+    )
+    reservas_min = _reservation_intervals(reservas)
+    bloqueos_min = _time_block_intervals(bloqueos)
 
-    # 6. Generar espacios de 30 minutos dentro de cada horario
-    horarios_disponibles = []
+    # 6. Generar espacios dentro de cada horario
+    horarios_disponibles: list[AvailableTimes] = []
 
     for horario in horarios:
-        apertura = _to_minutes(horario['hora_apertura'])
-        cierre = _to_minutes(horario['hora_cierre'])
+        apertura = to_minutes(horario["hora_apertura"])
+        cierre = to_minutes(horario["hora_cierre"])
         if cierre <= apertura:
             continue
 
         descanso = (
-            _to_minutes(horario['hora_descanso'])
-            if horario['hora_descanso'] is not None
+            to_minutes(horario["hora_descanso"])
+            if horario["hora_descanso"] is not None
             else None
         )
 
-        slot = apertura
-        while slot + duracion <= cierre:
-            slot_fin = slot + duracion
-            ocupado = any(
-                _overlaps(slot, slot_fin, inicio, fin)
-                for inicio, fin in ocupados
-            )
+        slots = build_slots(
+            apertura_min=apertura,
+            cierre_min=cierre,
+            duracion_min=duracion,
+            intervalo_min=intervalo_minutos,
+            descanso_min=descanso,
+            descanso_duracion_min=descanso_minutos,
+            reservas=reservas_min,
+            bloqueos=bloqueos_min,
+        )
+        horarios_disponibles.extend(_map_slots(horario, slots))
 
-            if (
-                not ocupado
-                and descanso is not None
-                and _overlaps(slot, slot_fin, descanso, descanso + BREAK_MINUTES)
-            ):
-                ocupado = True
-
-            horarios_disponibles.append(
-                AvailableTimes(
-                    id_horario=horario['id_horario'],
-                    dia=horario['dia'],
-                    hora_inicio=_to_time(slot),
-                    hora_fin=_to_time(slot_fin),
-                    disponible=not ocupado
-                )
-            )
-            slot += SLOT_MINUTES
+    # Los espacios ya pasados (hoy) o de fechas anteriores no son reservables.
+    ahora = datetime.now()
+    if fecha <= ahora.date():
+        limite = ahora.time() if fecha == ahora.date() else time(23, 59, 59)
+        horarios_disponibles = [
+            slot
+            if slot.hora_inicio > limite
+            else slot.model_copy(update={"disponible": False, "motivo": "pasado"})
+            for slot in horarios_disponibles
+        ]
 
     if not horarios_disponibles:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No hay horarios disponibles para la fecha seleccionada"
+            detail="No hay horarios disponibles para la fecha seleccionada",
         )
 
     return AvailableTimesResponse(
         negocio_id=negocio_id,
-        nombre_negocio=negocio['nombre'],
+        nombre_negocio=negocio["nombre"],
         fecha=fecha,
-        horarios_disponibles=horarios_disponibles
+        horarios_disponibles=horarios_disponibles,
     )
+
 
 #Obtener horarios disponibles de un negocio en una fecha con filtro por servicio
 async def get_available_times_by_service(
     pool: asyncpg.Pool,
     negocio_id: int,
     fecha: date,
-    servicio_id: int
+    servicio_id: int,
+    profesional_id: Optional[int] = None,
+    intervalo_minutos: int = SLOT_MINUTES,
+    descanso_minutos: int = BREAK_MINUTES,
 ) -> AvailableTimesResponse:
-    # Verificar que el servicio existe
     servicio = await repo.get_servicio_by_id(pool, servicio_id)
     if not servicio:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="El servicio no existe"
+            detail="El servicio no existe",
         )
-    
-    return await get_available_times(pool, negocio_id, fecha, servicio_id)
+    if servicio["negocio_id"] != negocio_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El servicio no pertenece a este negocio",
+        )
+
+    return await get_available_times(
+        pool,
+        negocio_id,
+        fecha,
+        servicio_id,
+        profesional_id,
+        intervalo_minutos,
+        descanso_minutos,
+    )
+
 
 #Obtener horarios disponibles de un negocio en una fecha
 async def get_only_available_times(
     pool: asyncpg.Pool,
     negocio_id: int,
     fecha: date,
-    servicio_id: Optional[int] = None
+    servicio_id: Optional[int] = None,
+    profesional_id: Optional[int] = None,
+    intervalo_minutos: int = SLOT_MINUTES,
+    descanso_minutos: int = BREAK_MINUTES,
 ) -> List[AvailableTimes]:
-    response = await get_available_times(pool, negocio_id, fecha, servicio_id)
+    response = await get_available_times(
+        pool,
+        negocio_id,
+        fecha,
+        servicio_id,
+        profesional_id,
+        intervalo_minutos,
+        descanso_minutos,
+    )
     horarios_libres = [h for h in response.horarios_disponibles if h.disponible]
     
     if not horarios_libres:
@@ -239,7 +388,8 @@ async def get_only_available_times(
     
     return horarios_libres
 
-#Obtener servicios de un negocio - CORREGIDO
+
+#Obtener servicios de un negocio
 async def get_services_by_negocio(
     pool: asyncpg.Pool,
     negocio_id: int
@@ -250,53 +400,101 @@ async def get_services_by_negocio(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="El negocio no tiene servicios registrados"
         )
-    # CORRECCIÓN: Convertir cada fila a ServiceView, no a dict
     return [ServiceView(**dict(servicio)) for servicio in servicios]
 
-# Crear una nueva reserva - CORREGIDO
+
+# Crear una nueva reserva
 async def create_reservation(
     pool: asyncpg.Pool,
     cliente_id: int,
     servicio_id: int,
     fecha: date,
-    hora_inicio: time
+    hora_inicio: time,
+    profesional_id: Optional[int] = None,
 ) -> ReservationResponse:
-    # 1. Verificar que el servicio existe
+    # 1. Verificar que el servicio existe y está activo
     servicio = await repo.get_servicio_by_id(pool, servicio_id)
     if not servicio:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="El servicio no existe"
+            detail="El servicio no existe",
+        )
+    if not servicio.get("estado_servicio", True):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El servicio no está disponible",
         )
 
-    duracion = servicio['duracion_minutos'] or SLOT_MINUTES
-    hora_fin = _to_time(_to_minutes(hora_inicio) + duracion)
+    negocio_id = servicio["negocio_id"]
+    negocio = await repo.get_negocio_by_id(pool, negocio_id)
+    if not negocio:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El negocio no existe o no está activo",
+        )
+
+    duracion = servicio["duracion_minutos"] or SLOT_MINUTES
+    if duracion <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La duración del servicio no es válida",
+        )
+
+    inicio = to_minutes(hora_inicio)
+    if inicio + duracion >= 24 * 60:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La reserva no puede terminar a medianoche o después",
+        )
+
+    ahora = datetime.now()
+    if fecha < ahora.date() or (
+        fecha == ahora.date() and hora_inicio <= ahora.time()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede reservar en una fecha u hora pasada",
+        )
+
+    if profesional_id is not None:
+        await _validate_professional_for_service(
+            pool, negocio_id, servicio_id, profesional_id
+        )
 
     # 2. Verificar que el horario está disponible
-    negocio_id = servicio['negocio_id']
     disponible = await check_availability(
-        pool, negocio_id, fecha, hora_inicio, duracion
+        pool,
+        negocio_id,
+        fecha,
+        hora_inicio,
+        duracion,
+        profesional_id=profesional_id,
     )
-    
     if not disponible:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="El horario seleccionado no está disponible"
+            detail="El horario seleccionado no está disponible",
         )
-    
-    # 3. Crear la reserva
-    reserva = await repo.create_reserva(
-        pool, cliente_id, servicio_id, fecha, hora_inicio, hora_fin
+
+    # 3. Crear la reserva de forma atómica (evita duplicados concurrentes)
+    reserva = await repo.create_reserva_atomic(
+        pool,
+        negocio_id,
+        cliente_id,
+        servicio_id,
+        fecha,
+        hora_inicio,
+        to_time(inicio + duracion),
+        profesional_id,
     )
-    
     if not reserva:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al crear la reserva"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El horario seleccionado ya no está disponible",
         )
-    
-    # CORRECCIÓN: Convertir a ReservationResponse
+
     return ReservationResponse(**dict(reserva))
+
 
 #  Verificar si un horario específico está disponible
 async def check_availability(
@@ -304,36 +502,65 @@ async def check_availability(
     negocio_id: int,
     fecha: date,
     hora_inicio: time,
-    duracion_minutos: int
+    duracion_minutos: int,
+    profesional_id: Optional[int] = None,
+    descanso_minutos: int = BREAK_MINUTES,
 ) -> bool:
-    inicio = _to_minutes(hora_inicio)
-    fin = inicio + duracion_minutos
-
-    dia_nombre = DIAS_MAP.get(fecha.weekday())
-    if not dia_nombre:
+    if duracion_minutos <= 0:
         return False
 
+    inicio = to_minutes(hora_inicio)
+    fin = inicio + duracion_minutos
+    if fin >= 24 * 60:
+        return False
+
+    ahora = datetime.now()
+    if fecha < ahora.date() or (
+        fecha == ahora.date() and hora_inicio <= ahora.time()
+    ):
+        return False
+
+    dia_nombre = day_for_date(fecha)
+
+    if profesional_id is not None:
+        profesional = await repo.get_profesional_by_id(pool, profesional_id)
+        if (
+            not profesional
+            or not profesional["activo"]
+            or profesional["negocio_id"] != negocio_id
+        ):
+            return False
+
     horarios = await repo.get_horarios_by_negocio_dia(
-        pool, negocio_id, dia_nombre.value
+        pool, negocio_id, dia_nombre
     )
     if not horarios:
         return False
 
+    bloqueos = await agenda_repo.get_blocks_by_date(pool, negocio_id, fecha)
+    if agenda_service.is_full_day_blocked(bloqueos):
+        return False
+
+    bloqueos_min = _time_block_intervals(bloqueos)
+    if any(
+        overlaps(inicio, fin, b_ini, b_fin) for b_ini, b_fin in bloqueos_min
+    ):
+        return False
+
     dentro_de_horario = False
     for horario in horarios:
-        apertura = _to_minutes(horario['hora_apertura'])
-        cierre = _to_minutes(horario['hora_cierre'])
+        apertura = to_minutes(horario["hora_apertura"])
+        cierre = to_minutes(horario["hora_cierre"])
         if cierre <= apertura or inicio < apertura or fin > cierre:
             continue
 
         descanso = (
-            _to_minutes(horario['hora_descanso'])
-            if horario['hora_descanso'] is not None
+            to_minutes(horario["hora_descanso"])
+            if horario["hora_descanso"] is not None
             else None
         )
-        if (
-            descanso is None
-            or not _overlaps(inicio, fin, descanso, descanso + BREAK_MINUTES)
+        if descanso is None or not overlaps(
+            inicio, fin, descanso, descanso + descanso_minutos
         ):
             dentro_de_horario = True
             break
@@ -341,17 +568,19 @@ async def check_availability(
     if not dentro_de_horario:
         return False
 
-    reservas = await repo.get_reservas_by_negocio_fecha(pool, negocio_id, fecha)
+    reservas = await repo.get_reservas_by_negocio_fecha(
+        pool, negocio_id, fecha, profesional_id
+    )
 
     for reserva in reservas:
-        reserva_inicio = _to_minutes(reserva['hora_inicio'])
-        if reserva['hora_fin'] is not None:
-            reserva_fin = _to_minutes(reserva['hora_fin'])
+        reserva_inicio = to_minutes(reserva["hora_inicio"])
+        if reserva["hora_fin"] is not None:
+            reserva_fin = to_minutes(reserva["hora_fin"])
         else:
             reserva_fin = reserva_inicio + (
-                reserva['duracion_minutos'] or SLOT_MINUTES
+                reserva["duracion_minutos"] or SLOT_MINUTES
             )
-        if _overlaps(inicio, fin, reserva_inicio, reserva_fin):
+        if overlaps(inicio, fin, reserva_inicio, reserva_fin):
             return False
-    
+
     return True

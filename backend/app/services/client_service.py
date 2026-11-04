@@ -1,6 +1,5 @@
 from fastapi import HTTPException, status
 from app.models.client import (
-    ShopView,
     AvailableTimes,
     AvailableTimesResponse,
     DiaSemana,
@@ -9,6 +8,8 @@ from app.models.client import (
 )
 from app.repositories import client_repository as repo
 from app.repositories import agenda_repository as agenda_repo
+from app.repositories import shop_address_repository as address_repo
+from app.repositories import shop_schedule_repository as schedule_repo
 from app.core.schedule_utils import (
     build_slots,
     day_for_date,
@@ -32,63 +33,260 @@ DIAS_MAP = {
     6: DiaSemana.DOMINGO,
 }
 
-# Listado normal
-async def list_shops(pool: asyncpg.Pool):
-    shops = await repo.get_all_shops(pool)
-    if not shops:
+ORDENES_VALIDOS = {
+    "relevancia",
+    "nombre",
+    "precio_asc",
+    "precio_desc",
+    "distancia",
+    "valoracion",
+    "populares",
+}
+
+
+def _validate_search_filters(
+    *,
+    q: Optional[str],
+    lat: Optional[float],
+    lng: Optional[float],
+    radio_km: Optional[float],
+    precio_min: Optional[float],
+    precio_max: Optional[float],
+    orden: str,
+) -> None:
+    if q is not None and len(q.strip()) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El término de búsqueda debe tener al menos 2 caracteres",
+        )
+
+    if (lat is None) != (lng is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes enviar latitud y longitud juntas.",
+        )
+
+    if radio_km is not None:
+        if lat is None or lng is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El radio de búsqueda requiere latitud y longitud.",
+            )
+        if radio_km <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El radio de búsqueda debe ser mayor que cero.",
+            )
+
+    if precio_min is not None and precio_min < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El precio mínimo no puede ser negativo.",
+        )
+
+    if precio_max is not None and precio_max < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El precio máximo no puede ser negativo.",
+        )
+
+    if (
+        precio_min is not None
+        and precio_max is not None
+        and precio_min > precio_max
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El precio mínimo no puede ser mayor que el máximo.",
+        )
+
+    if orden not in ORDENES_VALIDOS:
+        opciones = ", ".join(sorted(ORDENES_VALIDOS))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Orden inválido. Usa uno de: {opciones}.",
+        )
+
+    if orden == "distancia" and (lat is None or lng is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El orden por distancia requiere latitud y longitud.",
+        )
+
+
+def _shop_to_dict(shop) -> dict:
+    data = dict(shop)
+    if not data.get("direccion"):
+        data["direccion"] = None
+    return data
+
+
+async def _filter_by_availability(
+    pool: asyncpg.Pool,
+    shops: list[dict],
+    fecha: date,
+    hora: Optional[time],
+    servicio_id: Optional[int],
+) -> list[dict]:
+    """Conserva los negocios con al menos un espacio libre.
+
+    Reutiliza la misma lógica de disponibilidad que usa el flujo de reservas
+    (horarios, descansos, bloqueos, reservas y duración del servicio). Es una
+    comprobación por negocio, por lo que se aplica sobre la página ya filtrada.
+    """
+
+    disponibles: list[dict] = []
+    for shop in shops:
+        try:
+            response = await get_available_times(
+                pool,
+                shop["id"],
+                fecha,
+                servicio_id=servicio_id,
+            )
+        except HTTPException:
+            # Sin horarios para ese día, negocio bloqueado, servicio ajeno, etc.
+            continue
+
+        slots = [slot for slot in response.horarios_disponibles if slot.disponible]
+        if hora is not None:
+            slots = [
+                slot
+                for slot in slots
+                if slot.hora_inicio <= hora < slot.hora_fin
+            ]
+
+        if slots:
+            shop["disponible"] = True
+            disponibles.append(shop)
+
+    return disponibles
+
+
+async def search_catalog(
+    pool: asyncpg.Pool,
+    *,
+    q: Optional[str] = None,
+    categoria_id: Optional[int] = None,
+    categoria: Optional[str] = None,
+    ciudad: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radio_km: Optional[float] = None,
+    precio_min: Optional[float] = None,
+    precio_max: Optional[float] = None,
+    fecha: Optional[date] = None,
+    hora: Optional[time] = None,
+    servicio_id: Optional[int] = None,
+    orden: str = "relevancia",
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """Búsqueda unificada del catálogo de negocios (HU_34 a HU_41)."""
+
+    _validate_search_filters(
+        q=q,
+        lat=lat,
+        lng=lng,
+        radio_km=radio_km,
+        precio_min=precio_min,
+        precio_max=precio_max,
+        orden=orden,
+    )
+
+    if hora is not None and fecha is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes indicar la fecha para filtrar por hora.",
+        )
+
+    shops = await repo.search_shops_catalog(
+        pool,
+        q=q.strip() if q else None,
+        categoria_id=categoria_id,
+        categoria=categoria.strip() if categoria else None,
+        ciudad=ciudad.strip() if ciudad else None,
+        lat=lat,
+        lng=lng,
+        radio_km=radio_km,
+        precio_min=precio_min,
+        precio_max=precio_max,
+        orden=orden,
+        limit=limit,
+        offset=offset,
+    )
+    result = [_shop_to_dict(shop) for shop in shops]
+
+    if fecha is not None:
+        result = await _filter_by_availability(
+            pool, result, fecha, hora, servicio_id
+        )
+
+    return result
+
+
+async def list_categories(pool: asyncpg.Pool) -> list[dict]:
+    categories = await repo.get_categories(pool)
+    return [dict(category) for category in categories]
+
+
+async def get_shop_detail(pool: asyncpg.Pool, negocio_id: int) -> dict:
+    shop = await repo.get_negocio_by_id(pool, negocio_id)
+    if not shop:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No hay negocios registrados"
+            detail="El negocio no existe o no está activo.",
         )
-    return [dict(shop) for shop in shops]
 
-#Listado con filtro de nombre
+    address = await address_repo.get_shop_address(pool, negocio_id)
+    schedule = await schedule_repo.get_weekly_schedule(
+        pool, negocio_id, include_inactive=False
+    )
+    services = await repo.get_servicios_by_negocio(pool, negocio_id)
+
+    return {
+        "general": _shop_to_dict(shop),
+        "direccion": dict(address) if address else None,
+        "horarios": [dict(item) for item in schedule],
+        "servicios": [dict(item) for item in services],
+    }
+
+
+# Listado normal (compatibilidad con /client/list-shops)
+async def list_shops(
+    pool: asyncpg.Pool,
+    *,
+    categoria_id: Optional[int] = None,
+    categoria: Optional[str] = None,
+    ciudad: Optional[str] = None,
+    orden: str = "relevancia",
+    limit: int = 50,
+    offset: int = 0,
+):
+    return await search_catalog(
+        pool,
+        categoria_id=categoria_id,
+        categoria=categoria,
+        ciudad=ciudad,
+        orden=orden,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# Listado con filtro de nombre
 async def search_shops_by_name(pool: asyncpg.Pool, search_term: str):
-    if not search_term or len(search_term.strip()) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El término de búsqueda debe tener al menos 2 caracteres"
-        )
-    
-    shops = await repo.search_shops_by_name(pool, search_term.strip())
-    if not shops:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontraron negocios con '{search_term}'"
-        )
-    return [dict(shop) for shop in shops]
+    return await search_catalog(pool, q=search_term)
 
-#Listado con filtro de categoria
+
+# Listado con filtro de categoría
 async def search_shops_by_category(pool: asyncpg.Pool, category: str):
-    if not category or len(category.strip()) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La categoría debe tener al menos 2 caracteres"
-        )
-    
-    shops = await repo.search_shops_by_category(pool, category.strip())
-    if not shops:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontraron negocios en la categoría '{category}'"
-        )
-    return [dict(shop) for shop in shops]
+    return await search_catalog(pool, categoria=category)
 
-#Listado con filtro de nombre o categoria
+
+# Listado con filtro de nombre o categoría
 async def search_shops(pool: asyncpg.Pool, search_term: str):
-    if not search_term or len(search_term.strip()) < 2:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El término de búsqueda debe tener al menos 2 caracteres"
-        )
-    
-    shops = await repo.search_shops(pool, search_term.strip())
-    if not shops:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No se encontraron negocios relacionados con '{search_term}'"
-        )
-    return [dict(shop) for shop in shops]
+    return await search_catalog(pool, q=search_term)
 
 
 # Disponibilidad --------------------------------------------------------------

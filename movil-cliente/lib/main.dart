@@ -5,8 +5,8 @@ import 'screens/home/home_screen.dart';
 import 'screens/business/business_list_screen.dart';
 import 'screens/business/business_detail_screen.dart';
 import 'screens/booking/booking_screen.dart';
+import 'screens/booking/booking_create_screen.dart';
 import 'screens/booking/booking_list_screen.dart';
-import 'package:movil_cliente/screens/favorites/favorites_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -24,11 +24,11 @@ class MyApp extends StatelessWidget {
         '/login': (context) => LoginScreen(),
         '/register': (context) => RegisterScreen(),
         '/home': (context) => HomeScreen(),
-        '/business': (context) => BusinessListScreen(),
-        '/businessDetail': (context) => BusinessDetailScreen(),
+        '/business': (context) => const BusinessListScreen(),
+        '/businessDetail': (context) => const BusinessDetailScreen(),
         '/booking': (context) => BookingScreen(),
+        '/bookingCreate': (context) => const BookingCreateScreen(),
         '/bookings': (context) => BookingListScreen(),
-        '/favorites': (context) => FavoritesScreen(),
       },
     );
   }

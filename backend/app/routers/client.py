@@ -1,50 +1,154 @@
 from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
 from app.core.dependencies import get_db_pool, verify_api_key, get_current_user
-from app.models.client import ShopView, AvailableTimesResponse, AvailableTimes, ShopSchedules, ReservationResponse, CreateReservationRequest, ServiceView, ShopSearchParams
+from app.models.client import (
+    ShopView,
+    ShopDetailView,
+    CategoryView,
+    AvailableTimesResponse,
+    AvailableTimes,
+    ReservationResponse,
+    CreateReservationRequest,
+    ServiceView,
+)
 from app.services import client_service
-from app.repositories import client_repository as repo
-from typing import Optional, List
-from datetime import date
+from typing import Optional
+from datetime import date, time
 
 import asyncpg
 
 router = APIRouter(prefix="/client", tags=["client"], dependencies=[Depends(verify_api_key)])
 
-# Traer todos los negocios
+# Catálogo de categorías (para las etiquetas de filtro)
+@router.get('/categories', response_model=list[CategoryView])
+async def list_categories(
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.list_categories(pool)
+
+# Búsqueda unificada del catálogo (HU_34 a HU_41)
+@router.get('/shops', response_model=list[ShopView])
+async def search_catalog(
+    q: Optional[str] = Query(
+        None, min_length=2, max_length=100,
+        description="Texto libre: nombre, descripción, categoría o servicio",
+    ),
+    categoria_id: Optional[int] = Query(
+        None, ge=1, description="ID de categoría",
+    ),
+    categoria: Optional[str] = Query(
+        None, min_length=2, max_length=100, description="Nombre de categoría",
+    ),
+    ciudad: Optional[str] = Query(
+        None, min_length=2, max_length=100, description="Ciudad del negocio",
+    ),
+    lat: Optional[float] = Query(
+        None, ge=-90, le=90, description="Latitud del cliente",
+    ),
+    lng: Optional[float] = Query(
+        None, ge=-180, le=180, description="Longitud del cliente",
+    ),
+    radio_km: Optional[float] = Query(
+        None, gt=0, le=500, description="Radio de búsqueda en kilómetros",
+    ),
+    precio_min: Optional[float] = Query(
+        None, ge=0, description="Precio mínimo de algún servicio",
+    ),
+    precio_max: Optional[float] = Query(
+        None, ge=0, description="Precio máximo de algún servicio",
+    ),
+    fecha: Optional[date] = Query(
+        None, description="Filtra negocios con disponibilidad en esta fecha",
+    ),
+    hora: Optional[time] = Query(
+        None, description="Hora deseada (HH:MM); requiere fecha",
+    ),
+    servicio_id: Optional[int] = Query(
+        None, ge=1, description="Servicio requerido para el filtro de disponibilidad",
+    ),
+    orden: str = Query(
+        "relevancia",
+        description=(
+            "relevancia | nombre | precio_asc | precio_desc | "
+            "distancia | valoracion | populares"
+        ),
+    ),
+    limit: int = Query(50, ge=1, le=200, description="Resultados por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento de resultados"),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.search_catalog(
+        pool,
+        q=q,
+        categoria_id=categoria_id,
+        categoria=categoria,
+        ciudad=ciudad,
+        lat=lat,
+        lng=lng,
+        radio_km=radio_km,
+        precio_min=precio_min,
+        precio_max=precio_max,
+        fecha=fecha,
+        hora=hora,
+        servicio_id=servicio_id,
+        orden=orden,
+        limit=limit,
+        offset=offset,
+    )
+
+# Detalle público de un negocio (HU_40)
+@router.get('/shops/{negocio_id}', response_model=ShopDetailView)
+async def get_shop_detail(
+    negocio_id: int = Path(..., description="ID del negocio"),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.get_shop_detail(pool, negocio_id)
+
+# Traer todos los negocios (compatibilidad)
 @router.get('/list-shops', response_model=list[ShopView])
 async def list_shops(
-    pool: asyncpg.Pool = Depends(get_db_pool)
-    ):
-    
-    shops = await client_service.list_shops(pool)
-    return shops
+    category: Optional[str] = Query(
+        None, min_length=2, description="Nombre de categoría (compatibilidad)",
+    ),
+    categoria_id: Optional[int] = Query(None, ge=1),
+    ciudad: Optional[str] = Query(None, min_length=2),
+    orden: str = Query("relevancia"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.list_shops(
+        pool,
+        categoria_id=categoria_id,
+        categoria=category,
+        ciudad=ciudad,
+        orden=orden,
+        limit=limit,
+        offset=offset,
+    )
 
-# Buscador de negocios general
+# Buscador de negocios general (compatibilidad)
 @router.get('/search', response_model=list[ShopView])
 async def search_shops(
     q: str = Query(..., min_length=2, description="Término de búsqueda"),
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
-    shops = await client_service.search_shops(pool, q)
-    return shops
+    return await client_service.search_shops(pool, q)
 
-# Buscador de negocios por nombre
+# Buscador de negocios por nombre (compatibilidad)
 @router.get('/search-by-name', response_model=list[ShopView])
 async def search_shops_by_name(
     name: str = Query(..., min_length=2, description="Nombre del negocio"),
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
-    shops = await client_service.search_shops_by_name(pool, name)
-    return shops
+    return await client_service.search_shops_by_name(pool, name)
 
-# Buscador de negocios por categoría
+# Buscador de negocios por categoría (compatibilidad)
 @router.get('/search-by-category', response_model=list[ShopView])
 async def search_shops_by_category(
     category: str = Query(..., min_length=2, description="Categoría del negocio"),
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
-    shops = await client_service.search_shops_by_category(pool, category)
-    return shops
+    return await client_service.search_shops_by_category(pool, category)
 
 #Obtener servicios de un negocio
 @router.get('/{negocio_id}/servicios', response_model=list[ServiceView])

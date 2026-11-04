@@ -3,6 +3,7 @@ from app.models.shop import ShopRegister, ShopEdit
 from app.models.shop_contact import ShopContactRegister, ShopContactUpdate
 from app.models.shop_schedule import ShopRegisterSchedule, ShopScheduleUpdate
 from app.models.shop_address import ShopAddressRegister
+from app.core.schedule_utils import normalize_day
 from app.repositories import shop_repository as shop_repo
 from app.repositories import shop_contact_repository as contact_repo
 from app.repositories import shop_schedule_repository as sche_repo
@@ -74,7 +75,7 @@ async def get_shop_full_profile(pool: asyncpg.Pool, shop_id: int):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Negocio no encontrado.")
     
     contacts = await get_contacts_by_shop(pool, shop_id)
-    schedule = await get_weekly_schedule(pool, shop_id)
+    schedule = await get_weekly_schedule(pool, shop_id, include_inactive=False)
     address = await get_address_by_shop(pool, shop_id)
     
     return{
@@ -154,9 +155,27 @@ async def insert_address(pool:asyncpg.Pool,
         
 #SERVICE FOR SCHEDULE
 
-async def get_weekly_schedule(pool: asyncpg.Pool, shop_id: int):
-    schedule = await sche_repo.get_weekly_schedule(pool, shop_id)
+def _validate_schedule_hours(apertura, cierre, descanso):
+    if apertura >= cierre:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La hora de apertura debe ser menor que la hora de cierre.",
+        )
+    if descanso is not None and not (apertura <= descanso < cierre):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La hora de descanso debe estar dentro del horario de atención.",
+        )
+
+
+async def get_weekly_schedule(
+    pool: asyncpg.Pool, shop_id: int, include_inactive: bool = True
+):
+    schedule = await sche_repo.get_weekly_schedule(
+        pool, shop_id, include_inactive=include_inactive
+    )
     return schedule
+
 
 async def insert_schedule(
     pool: asyncpg.Pool, shop_id: int, data: ShopRegisterSchedule, current_user_id:int
@@ -167,21 +186,28 @@ async def insert_schedule(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Negocio no encontrado.")
             
     if shop["dueno_id"] != current_user_id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes permiso para ver este negocio.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes permiso para editar este negocio.")
+
+    day = normalize_day(data.dia)
+    _validate_schedule_hours(
+        data.hora_apertura, data.hora_cierre, data.hora_descanso
+    )
     
-    exist_day = await sche_repo.get_day_by_shop_and_day(pool, shop_id, data.dia)
+    exist_day = await sche_repo.get_day_by_shop_and_day(pool, shop_id, day)
     
     if exist_day:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"""
-                Ya existe el dia {data.dia} registrado. Si quiere modificarlo elija la opción 
-                'Editar'
-            """
+            f"Ya existe el día {day} registrado. Si quieres modificarlo, usa la opción 'Editar'."
         )
     
     schedule = await sche_repo.create_schedule(
-        pool, shop_id, data.dia, data.hora_apertura, data.hora_cierre
+        pool,
+        shop_id,
+        day,
+        data.hora_apertura,
+        data.hora_cierre,
+        data.hora_descanso,
     )
     
     return schedule
@@ -250,20 +276,34 @@ async def edit_schedule(
     schedule = await sche_repo.get_schedule_by_id(pool, schedule_id)
     if not schedule or schedule['negocio_id'] != shop_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Horario no encontrado.")
-    
-    # Validación de horas
-    if data.hora_apertura and data.hora_cierre:
-        if data.hora_apertura >= data.hora_cierre:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, 
-                "La hora de apertura debe ser menor que la hora de cierre."
-            )
-    
-    updated = await sche_repo.update_schedule(
-        pool, schedule_id,
-        data.hora_apertura, data.hora_cierre, 
-        data.hora_descanso, data.estado_horario
+
+    fields = data.model_dump(exclude_unset=True)
+    if not fields:
+        return schedule
+
+    if "hora_apertura" in fields and fields["hora_apertura"] is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La hora de apertura no puede ser nula.",
+        )
+    if "hora_cierre" in fields and fields["hora_cierre"] is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La hora de cierre no puede ser nula.",
+        )
+    if "estado_horario" in fields and fields["estado_horario"] is None:
+        fields.pop("estado_horario")
+
+    apertura = fields.get("hora_apertura", schedule["hora_apertura"])
+    cierre = fields.get("hora_cierre", schedule["hora_cierre"])
+    descanso = (
+        fields["hora_descanso"]
+        if "hora_descanso" in fields
+        else schedule["hora_descanso"]
     )
+    _validate_schedule_hours(apertura, cierre, descanso)
+
+    updated = await sche_repo.update_schedule(pool, schedule_id, fields)
     return updated
 
 
@@ -274,7 +314,10 @@ async def delete_schedule(
     current_user_id: int
 ):
     shop = await shop_repo.get_shop_by_id(pool, shop_id)
-    if not shop or shop['dueno_id'] != current_user_id:
+    if not shop:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Negocio no encontrado.")
+
+    if shop['dueno_id'] != current_user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes permiso.")
     
     schedule = await sche_repo.get_schedule_by_id(pool, schedule_id)

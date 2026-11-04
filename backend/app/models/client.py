@@ -54,6 +54,7 @@ class AvailableTimes(BaseModel):
     hora_inicio: time
     hora_fin: time
     disponible: bool
+    motivo: Optional[str] = None
 
 class ReservationRequest(BaseModel):
     negocio_id: int
@@ -67,6 +68,8 @@ class AvailableTimesResponse(BaseModel):
     nombre_negocio: str
     fecha: date
     horarios_disponibles: List[AvailableTimes]
+    bloqueado: bool = False
+    motivo_bloqueo: Optional[str] = None
     
 # Modelo para crear reserva
 class CreateReservationRequest(BaseModel):
@@ -75,6 +78,7 @@ class CreateReservationRequest(BaseModel):
     hora_inicio: time
     cliente_id: Optional[int] = None
     hora_fin: Optional[time] = None
+    profesional_id: Optional[int] = None
 
 # Modelo para respuesta de reserva
 class ReservationResponse(BaseModel):
@@ -86,6 +90,7 @@ class ReservationResponse(BaseModel):
     hora_fin: Optional[time] = None
     estado: EstadoReserva
     fecha_creacion: datetime
+    profesional_id: Optional[int] = None
 
 # Modelo para servicio
 class ServiceView(BaseModel):

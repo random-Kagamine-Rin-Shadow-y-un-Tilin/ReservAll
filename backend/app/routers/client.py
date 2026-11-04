@@ -60,9 +60,20 @@ async def get_available_times(
     negocio_id: int = Path(..., description="ID del negocio"),
     fecha: date = Query(..., description="Fecha (YYYY-MM-DD)"),
     servicio_id: Optional[int] = Query(None, description="ID del servicio (opcional)"),
+    profesional_id: Optional[int] = Query(None, description="ID del profesional (opcional)"),
+    intervalo_minutos: int = Query(30, ge=5, le=240, description="Intervalo de atención en minutos"),
+    descanso_minutos: int = Query(60, ge=0, le=240, description="Duración del descanso en minutos"),
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
-    return await client_service.get_available_times(pool, negocio_id, fecha, servicio_id)
+    return await client_service.get_available_times(
+        pool,
+        negocio_id,
+        fecha,
+        servicio_id,
+        profesional_id,
+        intervalo_minutos,
+        descanso_minutos,
+    )
 
 #Obtener solo los horarios libres de un negocio en una fecha específica
 @router.get('/{negocio_id}/available-times-only', response_model=list[AvailableTimes])
@@ -70,9 +81,20 @@ async def get_only_available_times(
     negocio_id: int = Path(..., description="ID del negocio"),
     fecha: date = Query(..., description="Fecha (YYYY-MM-DD)"),
     servicio_id: Optional[int] = Query(None, description="ID del servicio (opcional)"),
+    profesional_id: Optional[int] = Query(None, description="ID del profesional (opcional)"),
+    intervalo_minutos: int = Query(30, ge=5, le=240, description="Intervalo de atención en minutos"),
+    descanso_minutos: int = Query(60, ge=0, le=240, description="Duración del descanso en minutos"),
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
-    return await client_service.get_only_available_times(pool, negocio_id, fecha, servicio_id)
+    return await client_service.get_only_available_times(
+        pool,
+        negocio_id,
+        fecha,
+        servicio_id,
+        profesional_id,
+        intervalo_minutos,
+        descanso_minutos,
+    )
 
 # Obtener horarios disponibles para un servicio específico
 @router.get('/{negocio_id}/available-times-by-service', response_model=AvailableTimesResponse)
@@ -80,9 +102,20 @@ async def get_available_times_by_service(
     negocio_id: int = Path(..., description="ID del negocio"),
     fecha: date = Query(..., description="Fecha (YYYY-MM-DD)"),
     servicio_id: int = Query(..., description="ID del servicio"),
+    profesional_id: Optional[int] = Query(None, description="ID del profesional (opcional)"),
+    intervalo_minutos: int = Query(30, ge=5, le=240, description="Intervalo de atención en minutos"),
+    descanso_minutos: int = Query(60, ge=0, le=240, description="Duración del descanso en minutos"),
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
-    return await client_service.get_available_times_by_service(pool, negocio_id, fecha, servicio_id)
+    return await client_service.get_available_times_by_service(
+        pool,
+        negocio_id,
+        fecha,
+        servicio_id,
+        profesional_id,
+        intervalo_minutos,
+        descanso_minutos,
+    )
 
 # Endpoints de reservas
 @router.post('/create-reservation', response_model=ReservationResponse)
@@ -99,7 +132,8 @@ async def create_reservation(
         cliente_id,
         reservation.servicio_id,
         reservation.fecha,
-        reservation.hora_inicio
+        reservation.hora_inicio,
+        reservation.profesional_id,
     )
 
 # Endpoint para verificar disponibilidad
@@ -109,6 +143,8 @@ async def check_availability(
     fecha: date = Query(..., description="Fecha (YYYY-MM-DD)"),
     hora_inicio: str = Query(..., description="Hora inicio (HH:MM)"),
     duracion_minutos: int = Query(..., description="Duración en minutos"),
+    profesional_id: Optional[int] = Query(None, description="ID del profesional (opcional)"),
+    descanso_minutos: int = Query(60, ge=0, le=240, description="Duración del descanso en minutos"),
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
     from datetime import datetime
@@ -122,7 +158,13 @@ async def check_availability(
         )
     
     disponible = await client_service.check_availability(
-        pool, negocio_id, fecha, hora_inicio_obj, duracion_minutos
+        pool,
+        negocio_id,
+        fecha,
+        hora_inicio_obj,
+        duracion_minutos,
+        profesional_id=profesional_id,
+        descanso_minutos=descanso_minutos,
     )
     
     return {
@@ -130,5 +172,6 @@ async def check_availability(
         "fecha": fecha,
         "hora_inicio": hora_inicio,
         "duracion_minutos": duracion_minutos,
+        "profesional_id": profesional_id,
         "disponible": disponible
     }

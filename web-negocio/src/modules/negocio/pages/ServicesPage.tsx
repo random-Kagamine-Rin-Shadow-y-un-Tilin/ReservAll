@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  LuCheck,
   LuClock,
-  LuInfo,
   LuListChecks,
-  LuLock,
   LuPencil,
   LuPlus,
+  LuPower,
   LuTag,
-  LuTrash2,
   LuUsers,
 } from "react-icons/lu";
-import { getProfessionals, getServices } from "../api";
+import { editService, getProfessionals, getServices } from "../api";
 import {
   formatDuration,
   formatPrice,
@@ -28,6 +27,7 @@ import {
   ErrorState,
   PageLoader,
 } from "../../../shared/components/ui/Feedback";
+import { Modal } from "../../../shared/components/Modal";
 import { ServiceFormModal } from "../components/ServiceFormModal";
 
 export function ServicesPage() {
@@ -37,6 +37,12 @@ export function ServicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Service | null>(null);
+  const [toDeactivate, setToDeactivate] = useState<Service | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -70,8 +76,65 @@ export function ServicesPage() {
     };
   }, [selectedShopId, reloadKey]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   async function reload() {
     setReloadKey((key) => key + 1);
+  }
+
+  function openCreate() {
+    setEditing(null);
+    setModalOpen(true);
+  }
+
+  function openEdit(service: Service) {
+    setEditing(service);
+    setModalOpen(true);
+  }
+
+  async function activate(service: Service) {
+    if (!selectedShopId) return;
+    setTogglingId(service.id_servicio);
+    setError(null);
+    try {
+      await editService(selectedShopId, service.id_servicio, {
+        estado_servicio: true,
+      });
+      setNotice(`"${service.nombre}" ya está activo.`);
+      await reload();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "No pudimos activar el servicio.",
+      );
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function handleDeactivate() {
+    if (!selectedShopId || !toDeactivate) return;
+    setDeactivating(true);
+    setDeactivateError(null);
+    try {
+      await editService(selectedShopId, toDeactivate.id_servicio, {
+        estado_servicio: false,
+      });
+      setNotice(`"${toDeactivate.nombre}" quedó inactivo.`);
+      setToDeactivate(null);
+      await reload();
+    } catch (err) {
+      setDeactivateError(
+        err instanceof Error
+          ? err.message
+          : "No pudimos desactivar el servicio.",
+      );
+    } finally {
+      setDeactivating(false);
+    }
   }
 
   if (shopLoading || loading) {
@@ -102,7 +165,7 @@ export function ServicesPage() {
         title="Servicios"
         description="Lo que tus clientes pueden reservar. Agrega servicios con su duración, precio y equipo disponible."
         actions={
-          <Button leftIcon={<LuPlus size={16} />} onClick={() => setModalOpen(true)}>
+          <Button leftIcon={<LuPlus size={16} />} onClick={openCreate}>
             Nuevo servicio
           </Button>
         }
@@ -120,14 +183,12 @@ export function ServicesPage() {
             <Badge tone="neutral">{professionals.length} profesionales</Badge>
           </div>
 
-          <div className="flex items-start gap-2.5 rounded-xl border border-highlight/20 bg-highlight-tint/50 px-4 py-3">
-            <LuInfo size={17} className="mt-0.5 shrink-0 text-highlight" />
-            <p className="text-xs leading-relaxed text-secondary-text">
-              Ya puedes crear servicios. La <strong>edición y eliminación</strong> se
-              habilitarán en la siguiente fase, cuando el backend termine de implementar
-              esas operaciones.
-            </p>
-          </div>
+          {notice && (
+            <div className="flex items-center gap-2 rounded-xl border border-success/20 bg-success-tint px-4 py-3 text-sm font-semibold text-success">
+              <LuCheck size={16} />
+              {notice}
+            </div>
+          )}
 
           {services.length === 0 ? (
             <EmptyState
@@ -138,7 +199,7 @@ export function ServicesPage() {
                 <Button
                   size="sm"
                   leftIcon={<LuPlus size={15} />}
-                  onClick={() => setModalOpen(true)}
+                  onClick={openCreate}
                 >
                   Crear mi primer servicio
                 </Button>
@@ -215,26 +276,27 @@ export function ServicesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled
-                      title="Disponible en la siguiente fase"
                       leftIcon={<LuPencil size={14} />}
+                      onClick={() => openEdit(service)}
                     >
                       Editar
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled
-                      title="Disponible en la siguiente fase"
-                      className="text-error/60"
-                      leftIcon={<LuTrash2 size={14} />}
+                      loading={togglingId === service.id_servicio}
+                      className={
+                        service.estado_servicio ? "text-error/70" : "text-success"
+                      }
+                      leftIcon={<LuPower size={14} />}
+                      onClick={() =>
+                        service.estado_servicio
+                          ? setToDeactivate(service)
+                          : activate(service)
+                      }
                     >
-                      Eliminar
+                      {service.estado_servicio ? "Desactivar" : "Activar"}
                     </Button>
-                    <span className="ml-auto flex items-center gap-1 text-[10px] font-medium text-secondary-text">
-                      <LuLock size={10} />
-                      Pronto
-                    </span>
                   </div>
                 </Card>
               ))}
@@ -246,12 +308,60 @@ export function ServicesPage() {
       {selectedShopId && (
         <ServiceFormModal
           isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
+          onClose={() => {
+            setModalOpen(false);
+            setEditing(null);
+          }}
           shopId={selectedShopId}
           professionals={professionals}
+          service={editing}
           onSaved={reload}
         />
       )}
+
+      <Modal
+        isOpen={Boolean(toDeactivate)}
+        onClose={() => {
+          if (deactivating) return;
+          setToDeactivate(null);
+        }}
+        title="Desactivar servicio"
+        size="sm"
+      >
+        {toDeactivate && (
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-secondary-text">
+              ¿Desactivar{" "}
+              <strong className="text-foreground">{toDeactivate.nombre}</strong>?
+              Dejará de aparecer para que tus clientes lo reserven, pero podrás
+              reactivarlo cuando quieras.
+            </p>
+
+            {deactivateError && (
+              <div className="rounded-xl border border-error/20 bg-error-tint px-4 py-3 text-sm font-medium text-error">
+                {deactivateError}
+              </div>
+            )}
+
+            <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setToDeactivate(null)}
+                disabled={deactivating}
+              >
+                Volver
+              </Button>
+              <Button
+                variant="danger"
+                loading={deactivating}
+                onClick={handleDeactivate}
+              >
+                Sí, desactivar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

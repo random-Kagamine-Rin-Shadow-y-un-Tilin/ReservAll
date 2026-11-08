@@ -45,3 +45,11 @@ export function statusMeta(status: ReservationStatus): StatusMeta {
     }
   );
 }
+
+export function isActiveReservation(status: ReservationStatus): boolean {
+  return status === "pendiente" || status === "confirmada";
+}
+
+export function isHistoryReservation(status: ReservationStatus): boolean {
+  return status === "completada" || status === "cancelada";
+}

@@ -6,6 +6,7 @@ import {
   LuCheck,
   LuClock,
   LuFilter,
+  LuHistory,
   LuMail,
   LuRefreshCw,
   LuSearch,
@@ -15,8 +16,19 @@ import {
 } from "react-icons/lu";
 import { getProfessionals } from "../../negocio/api";
 import type { Professional } from "../../negocio/types";
-import { getReservations, updateReservationStatus } from "../api";
-import { RESERVATION_STATUSES, statusMeta } from "../constants";
+import {
+  completeReservation,
+  confirmReservation,
+  getReservationHistory,
+  getReservations,
+  rejectReservation,
+  updateReservationStatus,
+} from "../api";
+import {
+  RESERVATION_STATUSES,
+  isHistoryReservation,
+  statusMeta,
+} from "../constants";
 import type {
   Reservation,
   ReservationStatus,
@@ -26,7 +38,7 @@ import { useShop } from "../../shop/hooks/useShop";
 import { Badge } from "../../../shared/components/ui/Badge";
 import { Button } from "../../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../../shared/components/ui/Card";
-import { Field, Input, Select } from "../../../shared/components/ui/Field";
+import { Field, Input, Select, Textarea } from "../../../shared/components/ui/Field";
 import { PageHeader } from "../../../shared/components/ui/PageHeader";
 import {
   EmptyState,
@@ -55,6 +67,7 @@ const EMPTY_SUMMARY: ReservationSummary = {
 };
 
 type RangeKey = "todas" | "hoy" | "semana" | "mes" | "personalizado";
+type ViewMode = "agenda" | "historial";
 
 const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: "todas", label: "Todas" },
@@ -63,18 +76,42 @@ const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: "mes", label: "Últimos 30 días" },
 ];
 
-function rangeDates(key: RangeKey): { desde: string; hasta: string } {
+const HISTORY_RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
+  { value: "todas", label: "Todas" },
+  { value: "hoy", label: "Hoy" },
+  { value: "semana", label: "Últimos 7 días" },
+  { value: "mes", label: "Últimos 30 días" },
+];
+
+const VIEW_TABS: {
+  value: ViewMode;
+  label: string;
+  icon: typeof LuCalendar;
+}[] = [
+  { value: "agenda", label: "Agenda", icon: LuCalendar },
+  { value: "historial", label: "Historial", icon: LuHistory },
+];
+
+function rangeDates(key: RangeKey, mode: ViewMode): { desde: string; hasta: string } {
   const today = todayIso();
   if (key === "hoy") return { desde: today, hasta: today };
-  if (key === "semana") return { desde: today, hasta: addDays(today, 7) };
+  if (key === "semana") {
+    return mode === "historial"
+      ? { desde: addDays(today, -6), hasta: today }
+      : { desde: today, hasta: addDays(today, 7) };
+  }
   if (key === "mes") return { desde: addDays(today, -29), hasta: today };
   return { desde: "", hasta: "" };
 }
 
-function actionLabel(estado: ReservationStatus): string {
+function actionLabel(estado: ReservationStatus, reservation: Reservation): string {
   if (estado === "confirmada") return "Confirmar reserva";
   if (estado === "completada") return "Marcar como completada";
-  if (estado === "cancelada") return "Cancelar reserva";
+  if (estado === "cancelada") {
+    return reservation.estado === "pendiente"
+      ? "Rechazar reserva"
+      : "Cancelar reserva";
+  }
   return "Actualizar reserva";
 }
 
@@ -90,9 +127,22 @@ function actionDescription(estado: ReservationStatus, reservation: Reservation):
     )} se sumará a tus ingresos.`;
   }
   if (estado === "cancelada") {
+    if (reservation.estado === "pendiente") {
+      return `Rechazarás la solicitud de ${reservation.cliente_nombre} para el ${formatDateLong(
+        reservation.fecha,
+      )} a las ${formatClock(reservation.hora_inicio)}. El horario volverá a estar disponible.`;
+    }
     return `Cancelarás la cita de ${reservation.cliente_nombre}. Esta acción no se puede deshacer.`;
   }
   return "";
+}
+
+function actionButtonLabel(estado: ReservationStatus, reservation: Reservation): string {
+  if (estado === "cancelada") {
+    return reservation.estado === "pendiente" ? "Sí, rechazar" : "Sí, cancelar";
+  }
+  if (estado === "completada") return "Sí, completar";
+  return "Sí, confirmar";
 }
 
 export function ReservationsPage() {
@@ -106,6 +156,7 @@ export function ReservationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  const [mode, setMode] = useState<ViewMode>("agenda");
   const [rangeKey, setRangeKey] = useState<RangeKey>("todas");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
@@ -119,6 +170,7 @@ export function ReservationsPage() {
     reservation: Reservation;
     estado: ReservationStatus;
   } | null>(null);
+  const [statusMotivo, setStatusMotivo] = useState("");
   const [updating, setUpdating] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -151,7 +203,10 @@ export function ReservationsPage() {
     setLoading(true);
     setError(null);
 
-    getReservations(selectedShopId, {
+    const fetchReservations =
+      mode === "historial" ? getReservationHistory : getReservations;
+
+    fetchReservations(selectedShopId, {
       fecha_desde: desde || undefined,
       fecha_hasta: hasta || undefined,
       estado: estado === "todas" ? undefined : estado,
@@ -166,7 +221,11 @@ export function ReservationsPage() {
       .catch((err) => {
         if (!active) return;
         setError(
-          err instanceof Error ? err.message : "No pudimos cargar las reservas.",
+          err instanceof Error
+            ? err.message
+            : mode === "historial"
+              ? "No pudimos cargar el historial de reservas."
+              : "No pudimos cargar las reservas.",
         );
       })
       .finally(() => {
@@ -179,7 +238,16 @@ export function ReservationsPage() {
     return () => {
       active = false;
     };
-  }, [selectedShopId, desde, hasta, estado, profesionalId, debouncedSearch, reloadKey]);
+  }, [
+    selectedShopId,
+    mode,
+    desde,
+    hasta,
+    estado,
+    profesionalId,
+    debouncedSearch,
+    reloadKey,
+  ]);
 
   const activeRange = useMemo<RangeKey>(() => {
     if (rangeKey !== "personalizado") return rangeKey;
@@ -188,7 +256,7 @@ export function ReservationsPage() {
 
   function applyRange(key: RangeKey) {
     setRangeKey(key);
-    const dates = rangeDates(key);
+    const dates = rangeDates(key, mode);
     setDesde(dates.desde);
     setHasta(dates.hasta);
   }
@@ -202,19 +270,55 @@ export function ReservationsPage() {
 
   function requestStatus(reservation: Reservation, nextStatus: ReservationStatus) {
     setStatusError(null);
+    setStatusMotivo("");
     setStatusTarget({ reservation, estado: nextStatus });
+  }
+
+  function changeMode(nextMode: ViewMode) {
+    setMode(nextMode);
+    setRangeKey("todas");
+    setDesde("");
+    setHasta("");
+    setEstado("todas");
+    setStatusTarget(null);
+    setStatusMotivo("");
+    setSelected(null);
   }
 
   async function confirmStatusChange() {
     if (!selectedShopId || !statusTarget) return;
+    const target = statusTarget;
     setUpdating(true);
     setStatusError(null);
     try {
-      const updated = await updateReservationStatus(
-        selectedShopId,
-        statusTarget.reservation.id_reserva,
-        statusTarget.estado,
-      );
+      const motivo = statusMotivo.trim() || undefined;
+      let updated: Reservation;
+
+      if (target.estado === "confirmada") {
+        updated = await confirmReservation(
+          selectedShopId,
+          target.reservation.id_reserva,
+        );
+      } else if (target.estado === "completada") {
+        updated = await completeReservation(
+          selectedShopId,
+          target.reservation.id_reserva,
+        );
+      } else if (target.reservation.estado === "pendiente") {
+        updated = await rejectReservation(
+          selectedShopId,
+          target.reservation.id_reserva,
+          motivo,
+        );
+      } else {
+        updated = await updateReservationStatus(
+          selectedShopId,
+          target.reservation.id_reserva,
+          "cancelada",
+          motivo,
+        );
+      }
+
       setReservations((current) =>
         current.map((item) =>
           item.id_reserva === updated.id_reserva ? updated : item,
@@ -223,8 +327,15 @@ export function ReservationsPage() {
       setSelected((current) =>
         current && current.id_reserva === updated.id_reserva ? updated : current,
       );
-      setNotice(`Reserva ${statusMeta(updated.estado).label.toLowerCase()} correctamente.`);
+      setNotice(
+        target.estado === "cancelada"
+          ? target.reservation.estado === "pendiente"
+            ? "Reserva rechazada correctamente."
+            : "Reserva cancelada correctamente."
+          : `Reserva ${statusMeta(updated.estado).label.toLowerCase()} correctamente.`,
+      );
       setStatusTarget(null);
+      setStatusMotivo("");
       setReloadKey((key) => key + 1);
     } catch (err) {
       setStatusError(
@@ -259,37 +370,39 @@ export function ReservationsPage() {
     estado !== "todas" ||
     Boolean(profesionalId);
 
-  return (
-    <div className="space-y-5">
-      <PageHeader
-        eyebrow="Operación"
-        title="Reservas"
-        description="Confirma, completa o cancela las citas de tus clientes. Los ingresos se calculan con las reservas completadas."
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<LuRefreshCw size={15} />}
-            onClick={() => setReloadKey((key) => key + 1)}
-          >
-            Actualizar
-          </Button>
-        }
-      />
-
-      {notice && (
-        <div className="flex items-center gap-2 rounded-xl border border-success/20 bg-success-tint px-4 py-3 text-sm font-semibold text-success">
-          <LuCheck size={16} />
-          {notice}
-        </div>
-      )}
-
-      {error && (
-        <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
+  const summaryCards =
+    mode === "historial"
+      ? [
+          {
+            label: "Registros",
+            value: summary.total,
+            hint: "En el historial",
+            icon: LuHistory,
+            tone: "bg-surface-muted text-secondary-text",
+          },
+          {
+            label: "Completadas",
+            value: summary.completadas,
+            hint: "Citas atendidas",
+            icon: LuCheck,
+            tone: "bg-success-tint text-success",
+          },
+          {
+            label: "Canceladas",
+            value: summary.canceladas,
+            hint: "Rechazadas o canceladas",
+            icon: LuBan,
+            tone: "bg-error-tint text-error",
+          },
+          {
+            label: "Ingresos",
+            value: formatMoney(summary.ingresos, true),
+            hint: "Reservas completadas",
+            icon: LuWallet,
+            tone: "bg-primary-tint text-primary",
+          },
+        ]
+      : [
           {
             label: "Pendientes",
             value: summary.pendientes,
@@ -318,7 +431,65 @@ export function ReservationsPage() {
             icon: LuWallet,
             tone: "bg-primary-tint text-primary",
           },
-        ].map((stat) => {
+        ];
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Operación"
+        title="Reservas"
+        description={
+          mode === "historial"
+            ? "Consulta las citas completadas y canceladas, con el motivo de cada rechazo o cancelación."
+            : "Confirma, rechaza o completa las citas de tus clientes. Los ingresos se calculan con las reservas completadas."
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<LuRefreshCw size={15} />}
+            onClick={() => setReloadKey((key) => key + 1)}
+          >
+            Actualizar
+          </Button>
+        }
+      />
+
+      <div className="flex flex-wrap gap-2">
+        {VIEW_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const active = mode === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => changeMode(tab.value)}
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                active
+                  ? "border-primary bg-primary text-white shadow-[0_10px_24px_-16px_rgba(159,64,45,0.9)]"
+                  : "border-border bg-card text-secondary-text hover:border-primary-soft/60 hover:text-foreground"
+              }`}
+            >
+              <Icon size={16} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {notice && (
+        <div className="flex items-center gap-2 rounded-xl border border-success/20 bg-success-tint px-4 py-3 text-sm font-semibold text-success">
+          <LuCheck size={16} />
+          {notice}
+        </div>
+      )}
+
+      {error && (
+        <ErrorState message={error} onRetry={() => setReloadKey((key) => key + 1)} />
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.label} className="p-5">
@@ -354,20 +525,22 @@ export function ReservationsPage() {
         />
         <div className="space-y-4 p-4">
           <div className="flex flex-wrap gap-2">
-            {RANGE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => applyRange(option.value)}
-                className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                  activeRange === option.value
-                    ? "border-primary bg-primary text-white"
-                    : "border-border bg-card text-secondary-text hover:border-primary-soft/60 hover:text-foreground"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+            {(mode === "historial" ? HISTORY_RANGE_OPTIONS : RANGE_OPTIONS).map(
+              (option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => applyRange(option.value)}
+                  className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                    activeRange === option.value
+                      ? "border-primary bg-primary text-white"
+                      : "border-border bg-card text-secondary-text hover:border-primary-soft/60 hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ),
+            )}
             {activeRange === "personalizado" && (
               <Badge tone="primary">Rango personalizado</Badge>
             )}
@@ -405,7 +578,12 @@ export function ReservationsPage() {
                 }
               >
                 <option value="todas">Todos los estados</option>
-                {RESERVATION_STATUSES.map((item) => (
+                {(mode === "historial"
+                  ? RESERVATION_STATUSES.filter((item) =>
+                      isHistoryReservation(item.value),
+                    )
+                  : RESERVATION_STATUSES
+                ).map((item) => (
                   <option key={item.value} value={item.value}>
                     {item.label}
                   </option>
@@ -450,17 +628,27 @@ export function ReservationsPage() {
 
       <Card>
         <CardHeader
-          title="Agenda"
-          subtitle={`${summary.total} ${summary.total === 1 ? "reserva" : "reservas"} en el periodo`}
-          icon={<LuCalendar />}
+          title={mode === "historial" ? "Historial" : "Agenda"}
+          subtitle={`${summary.total} ${summary.total === 1 ? "reserva" : "reservas"} ${
+            mode === "historial" ? "en el historial" : "en el periodo"
+          }`}
+          icon={mode === "historial" ? <LuHistory /> : <LuCalendar />}
         />
 
         {reservations.length === 0 ? (
           <div className="p-4">
             <EmptyState
-              icon={<LuCalendar />}
-              title="No hay reservas con estos filtros"
-              description="Cuando tus clientes reserven, sus citas aparecerán aquí. También puedes ampliar el rango de fechas."
+              icon={mode === "historial" ? <LuHistory /> : <LuCalendar />}
+              title={
+                mode === "historial"
+                  ? "Todavía no hay historial"
+                  : "No hay reservas con estos filtros"
+              }
+              description={
+                mode === "historial"
+                  ? "Las citas completadas y canceladas aparecerán aquí con su fecha de actualización."
+                  : "Cuando tus clientes reserven, sus citas aparecerán aquí. También puedes ampliar el rango de fechas."
+              }
               action={
                 hasFilters ? (
                   <Button size="sm" variant="outline" onClick={clearFilters}>
@@ -522,6 +710,11 @@ export function ReservationsPage() {
                           <Badge tone={meta.tone} dot>
                             {meta.label}
                           </Badge>
+                          {mode === "historial" && reservation.fecha_actualizacion && (
+                            <p className="mt-1 text-xs text-secondary-text">
+                              {formatDateTime(reservation.fecha_actualizacion)}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
@@ -559,7 +752,9 @@ export function ReservationsPage() {
                                 className="text-error/80 hover:bg-error-tint hover:text-error"
                                 onClick={() => requestStatus(reservation, "cancelada")}
                               >
-                                Cancelar
+                                {reservation.estado === "pendiente"
+                                  ? "Rechazar"
+                                  : "Cancelar"}
                               </Button>
                             )}
                           </div>
@@ -589,6 +784,11 @@ export function ReservationsPage() {
                         {meta.label}
                       </Badge>
                     </div>
+                    {mode === "historial" && reservation.fecha_actualizacion && (
+                      <p className="text-xs text-secondary-text">
+                        Actualizada el {formatDateTime(reservation.fecha_actualizacion)}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary-text">
                       <span className="flex items-center gap-1.5">
                         <LuCalendar size={13} />
@@ -639,7 +839,9 @@ export function ReservationsPage() {
                           className="text-error/80 hover:bg-error-tint hover:text-error"
                           onClick={() => requestStatus(reservation, "cancelada")}
                         >
-                          Cancelar
+                          {reservation.estado === "pendiente"
+                            ? "Rechazar"
+                            : "Cancelar"}
                         </Button>
                       )}
                     </div>
@@ -665,7 +867,11 @@ export function ReservationsPage() {
           if (updating) return;
           setStatusTarget(null);
         }}
-        title={statusTarget ? actionLabel(statusTarget.estado) : "Actualizar reserva"}
+        title={
+          statusTarget
+            ? actionLabel(statusTarget.estado, statusTarget.reservation)
+            : "Actualizar reserva"
+        }
         size="sm"
       >
         {statusTarget && (
@@ -673,6 +879,28 @@ export function ReservationsPage() {
             <div className="rounded-xl border border-border/70 bg-surface/70 px-4 py-3 text-sm leading-relaxed text-secondary-text">
               {actionDescription(statusTarget.estado, statusTarget.reservation)}
             </div>
+
+            {statusTarget.estado === "cancelada" && (
+              <Field
+                label={
+                  statusTarget.reservation.estado === "pendiente"
+                    ? "Motivo del rechazo"
+                    : "Motivo de la cancelación"
+                }
+                htmlFor="reservation-status-motivo"
+                hint="Opcional. Se guardará en la reserva y podrás consultarlo en el historial."
+              >
+                <Textarea
+                  id="reservation-status-motivo"
+                  rows={3}
+                  maxLength={500}
+                  placeholder="Ej. No hay disponibilidad en ese horario"
+                  value={statusMotivo}
+                  onChange={(event) => setStatusMotivo(event.target.value)}
+                  disabled={updating}
+                />
+              </Field>
+            )}
 
             {statusError && (
               <div className="rounded-xl border border-error/20 bg-error-tint px-4 py-3 text-sm font-medium text-error">
@@ -696,12 +924,12 @@ export function ReservationsPage() {
                 {statusTarget.estado === "cancelada" ? (
                   <>
                     <LuBan size={15} />
-                    Sí, cancelar
+                    {actionButtonLabel(statusTarget.estado, statusTarget.reservation)}
                   </>
                 ) : (
                   <>
                     <LuCheck size={15} />
-                    Confirmar
+                    {actionButtonLabel(statusTarget.estado, statusTarget.reservation)}
                   </>
                 )}
               </Button>
@@ -798,6 +1026,34 @@ function ReservationDetailModal({
             ))}
           </div>
 
+          {reservation.comentario && (
+            <div className="rounded-xl border border-border/70 bg-surface/60 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-secondary-text">
+                Comentario del cliente
+              </p>
+              <p className="mt-1 whitespace-pre-line text-sm text-foreground">
+                {reservation.comentario}
+              </p>
+            </div>
+          )}
+
+          {reservation.motivo && (
+            <div className="rounded-xl border border-error/20 bg-error-tint px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-error">
+                Motivo de rechazo o cancelación
+              </p>
+              <p className="mt-1 whitespace-pre-line text-sm font-medium text-foreground">
+                {reservation.motivo}
+              </p>
+            </div>
+          )}
+
+          {reservation.fecha_actualizacion && (
+            <p className="text-xs text-secondary-text">
+              Última actualización: {formatDateTime(reservation.fecha_actualizacion)}
+            </p>
+          )}
+
           {(reservation.estado === "pendiente" ||
             reservation.estado === "confirmada") && (
             <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
@@ -807,7 +1063,9 @@ function ReservationDetailModal({
                 leftIcon={<LuX size={15} />}
                 onClick={() => onRequestStatus(reservation, "cancelada")}
               >
-                Cancelar cita
+                {reservation.estado === "pendiente"
+                  ? "Rechazar solicitud"
+                  : "Cancelar cita"}
               </Button>
               {reservation.estado === "pendiente" ? (
                 <Button

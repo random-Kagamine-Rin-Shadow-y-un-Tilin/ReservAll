@@ -56,3 +56,39 @@ async def get_service_by_id(pool, service_id: int):
     query = "SELECT * FROM servicios WHERE id_servicio = $1"
     async with pool.acquire() as conn:
         return await conn.fetchrow(query, service_id)
+
+async def update_service(pool, service_id: int, data: dict):
+    fields = []
+    values = []
+    idx = 1
+    for key, value in data.items():
+        fields.append(f"{key} = ${idx}")
+        values.append(value)
+        idx += 1
+
+    if not fields:
+        return await get_service_by_id(pool, service_id)
+
+    values.append(service_id)
+    query = f"""
+        UPDATE servicios SET {', '.join(fields)}
+        WHERE id_servicio = ${idx}
+        RETURNING *
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, *values)
+
+async def replace_service_professionals(pool, service_id: int, professional_ids: list[int]):
+    query = "DELETE FROM servicios_profesionales WHERE servicio_id = $1"
+    async with pool.acquire() as conn:
+        await conn.execute(query, service_id)
+    await assign_professionals(pool, service_id, professional_ids)
+
+async def set_service_status(pool, service_id: int, estado: bool):
+    query = """
+        UPDATE servicios SET estado_servicio = $1
+        WHERE id_servicio = $2
+        RETURNING *
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, estado, service_id)

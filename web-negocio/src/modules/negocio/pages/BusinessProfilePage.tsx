@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   LuExternalLink,
   LuEye,
@@ -11,8 +11,9 @@ import {
   LuPlus,
   LuStore,
   LuTrash2,
+  LuTriangleAlert,
 } from "react-icons/lu";
-import { getContactsByShop, getShopForId } from "../../shop/api";
+import { deleteShop, getContactsByShop, getShopForId } from "../../shop/api";
 import type { ShopContactInfo, ShopFullProfileOut } from "../../shop/types";
 import { useShop } from "../../shop/hooks/useShop";
 import { deleteContact, getPublicShopIds, toggleShopStatus } from "../api";
@@ -33,6 +34,7 @@ import {
 import { Modal } from "../../../shared/components/Modal";
 
 export function BusinessProfilePage() {
+  const navigate = useNavigate();
   const {
     selectedShop,
     selectedShopId,
@@ -56,6 +58,9 @@ export function BusinessProfilePage() {
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [deleteShopOpen, setDeleteShopOpen] = useState(false);
+  const [deletingShop, setDeletingShop] = useState(false);
+  const [deleteShopError, setDeleteShopError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedShopId) {
@@ -143,6 +148,24 @@ export function BusinessProfilePage() {
       );
     } finally {
       setTogglingStatus(false);
+    }
+  }
+
+  async function handleDeleteShop() {
+    if (!selectedShopId) return;
+    setDeletingShop(true);
+    setDeleteShopError(null);
+    try {
+      await deleteShop(selectedShopId);
+      setDeleteShopOpen(false);
+      await refreshShops();
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      setDeleteShopError(
+        err instanceof Error ? err.message : "No pudimos eliminar el negocio.",
+      );
+    } finally {
+      setDeletingShop(false);
     }
   }
 
@@ -433,6 +456,36 @@ export function BusinessProfilePage() {
         </div>
       </div>
 
+      <Card className="border-error/30">
+        <CardHeader
+          title="Zona de riesgo"
+          subtitle="Acciones que afectan la visibilidad de tu negocio"
+          icon={<LuTriangleAlert />}
+        />
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Eliminar negocio
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-secondary-text">
+              El negocio se desactiva y deja de mostrarse a tus clientes. Tus
+              reservas y datos se conservan.
+            </p>
+          </div>
+          <Button
+            variant="danger"
+            size="sm"
+            leftIcon={<LuTrash2 size={14} />}
+            onClick={() => {
+              setDeleteShopError(null);
+              setDeleteShopOpen(true);
+            }}
+          >
+            Eliminar negocio
+          </Button>
+        </div>
+      </Card>
+
       <ShopGeneralFormModal
         isOpen={generalModalOpen}
         onClose={() => setGeneralModalOpen(false)}
@@ -488,6 +541,51 @@ export function BusinessProfilePage() {
               onClick={handleDeleteContact}
             >
               Sí, eliminar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={deleteShopOpen}
+        onClose={() => {
+          if (deletingShop) return;
+          setDeleteShopOpen(false);
+        }}
+        title="Eliminar negocio"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-3 rounded-xl border border-error/20 bg-error-tint px-4 py-3">
+            <LuTriangleAlert className="mt-0.5 shrink-0 text-error" />
+            <p className="text-sm leading-relaxed text-secondary-text">
+              ¿Seguro que quieres eliminar{" "}
+              <strong className="text-foreground">{general.nombre}</strong>? El
+              negocio se desactivará y dejará de aparecer en el directorio y en
+              las búsquedas. Tus reservas y datos se conservan.
+            </p>
+          </div>
+
+          {deleteShopError && (
+            <div className="rounded-xl border border-error/20 bg-error-tint px-4 py-3 text-sm font-medium text-error">
+              {deleteShopError}
+            </div>
+          )}
+
+          <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteShopOpen(false)}
+              disabled={deletingShop}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              loading={deletingShop}
+              onClick={handleDeleteShop}
+            >
+              Sí, eliminar negocio
             </Button>
           </div>
         </div>

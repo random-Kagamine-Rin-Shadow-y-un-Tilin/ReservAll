@@ -159,6 +159,23 @@ export async function registerSchedule(
     return res.json()
 }
 
+// DELETE SHOP (soft delete: desactiva el negocio)
+export async function deleteShop(shopId: number): Promise<{
+    message: string
+    shop: { id: number; nombre: string; estado_negocio: boolean }
+}> {
+    const res = await fetchWithAuth(`${API_URL}/shop/delete-shop/${shopId}`, {
+        method: 'DELETE',
+    })
+
+    if (!res.ok){
+        const error = await res.json()
+        throw new Error(error.detail || 'Error al eliminar el negocio.')
+    }
+
+    return res.json()
+}
+
 //ADDRESS ACTIONS
 export async function getAddress(shopId: number):Promise<ShopAddressInfo> {
     const res = await fetchWithAuth(`${API_URL}/shop/get-address/${shopId}`)

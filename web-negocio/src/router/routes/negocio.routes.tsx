@@ -9,6 +9,7 @@ import { ReservationsPage } from "../../modules/reservas/pages/ReservationsPage"
 import { ClientsPage } from "../../modules/clientes/pages/ClientsPage";
 import { ReportsPage } from "../../modules/reportes/pages/ReportsPage";
 import { RegisterShopPage } from "../../modules/shop/pages/RegisterShopPage";
+import { AgendaPage } from "../../modules/agenda/pages/AgendaPage";
 
 export const negocioRoutes = (
   <>
@@ -18,6 +19,7 @@ export const negocioRoutes = (
     <Route path="/servicios" element={<ServicesPage />} />
     <Route path="/profesionales" element={<ProfessionalsPage />} />
     <Route path="/horarios" element={<SchedulesPage />} />
+    <Route path="/agenda" element={<AgendaPage />} />
     <Route path="/reservas" element={<ReservationsPage />} />
     <Route path="/clientes" element={<ClientsPage />} />
     <Route path="/reportes" element={<ReportsPage />} />

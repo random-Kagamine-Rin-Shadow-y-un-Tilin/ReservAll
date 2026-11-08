@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import date, time, datetime
 
@@ -7,6 +7,15 @@ from app.models.client import EstadoReserva
 
 class ReservationStatusUpdate(BaseModel):
     estado: EstadoReserva
+    motivo: Optional[str] = Field(
+        None, max_length=500, description="Motivo del cambio (opcional)"
+    )
+
+
+class ReservationRejectRequest(BaseModel):
+    motivo: Optional[str] = Field(
+        None, max_length=500, description="Motivo del rechazo (opcional)"
+    )
 
 
 class OwnerReservationOut(BaseModel):
@@ -24,7 +33,10 @@ class OwnerReservationOut(BaseModel):
     hora_inicio: time
     hora_fin: Optional[time] = None
     estado: EstadoReserva
+    comentario: Optional[str] = None
+    motivo: Optional[str] = None
     fecha_creacion: Optional[datetime] = None
+    fecha_actualizacion: Optional[datetime] = None
 
 
 class ReservationSummary(BaseModel):

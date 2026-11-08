@@ -282,6 +282,7 @@ async def get_reservas_by_negocio_fecha(
     negocio_id: int,
     fecha: date,
     profesional_id: Optional[int] = None,
+    exclude_reservation_id: Optional[int] = None,
 ):
     query = """
         SELECT
@@ -300,6 +301,9 @@ async def get_reservas_by_negocio_fecha(
             f" AND (r.profesional_id = ${len(params)}"
             " OR r.profesional_id IS NULL)"
         )
+    if exclude_reservation_id is not None:
+        params.append(exclude_reservation_id)
+        query += f" AND r.id_reserva <> ${len(params)}"
     query += " ORDER BY r.hora_inicio"
 
     async with pool.acquire() as conn:
@@ -390,6 +394,7 @@ async def create_reserva_atomic(
     hora_inicio: time,
     hora_fin: time,
     profesional_id: Optional[int] = None,
+    comentario: Optional[str] = None,
 ):
     """Inserta la reserva solo si el espacio sigue libre.
 
@@ -404,9 +409,9 @@ async def create_reserva_atomic(
         )
         INSERT INTO reservas (
             cliente_id, servicio_id, fecha, hora_inicio, hora_fin, estado,
-            fecha_creacion, profesional_id
+            fecha_creacion, profesional_id, comentario
         )
-        SELECT $2, $3, $4, $5, $6, 'pendiente', NOW(), $7
+        SELECT $2, $3, $4, $5, $6, 'pendiente', NOW(), $7, $8
         FROM lock
         WHERE NOT EXISTS (
             SELECT 1
@@ -433,7 +438,7 @@ async def create_reserva_atomic(
                   )
         )
         RETURNING id_reserva, cliente_id, servicio_id, fecha, hora_inicio,
-                  hora_fin, estado, fecha_creacion, profesional_id
+                  hora_fin, estado, fecha_creacion, profesional_id, comentario
     """
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -446,6 +451,241 @@ async def create_reserva_atomic(
                 hora_inicio,
                 hora_fin,
                 profesional_id,
+                comentario,
+            )
+
+
+# Reservas del cliente (HU_43, HU_46, HU_47, HU_49, HU_50 y HU_53) ----------
+
+_CLIENT_RESERVATION_SELECT = """
+    SELECT
+        r.id_reserva,
+        r.cliente_id,
+        s.negocio_id,
+        n.nombre AS negocio_nombre,
+        r.servicio_id,
+        s.nombre AS servicio_nombre,
+        s.duracion_minutos,
+        s.precio,
+        r.profesional_id,
+        p.nombre AS profesional_nombre,
+        r.fecha,
+        r.hora_inicio,
+        COALESCE(
+            r.hora_fin,
+            r.hora_inicio + make_interval(mins => s.duracion_minutos)
+        ) AS hora_fin,
+        r.estado,
+        r.comentario,
+        r.motivo,
+        r.fecha_creacion,
+        r.fecha_actualizacion
+    FROM reservas AS r
+    INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
+    INNER JOIN negocios AS n ON n.id = s.negocio_id
+    LEFT JOIN profesionales AS p ON p.id_profesional = r.profesional_id
+"""
+
+
+def _client_reservation_filters(
+    cliente_id: int,
+    filtro: Optional[str] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+):
+    conditions = ["r.cliente_id = $1"]
+    params: list[object] = [cliente_id]
+
+    today = date.today()
+    if filtro == "proximas":
+        params.append(today)
+        conditions.append(f"r.fecha >= ${len(params)}::date")
+        conditions.append("r.estado IN ('pendiente', 'confirmada')")
+    elif filtro == "historial":
+        params.append(today)
+        conditions.append(
+            f"(r.fecha < ${len(params)}::date"
+            " OR r.estado IN ('completada', 'cancelada'))"
+        )
+    elif filtro == "canceladas":
+        conditions.append("r.estado = 'cancelada'")
+
+    if fecha_desde is not None:
+        params.append(fecha_desde)
+        conditions.append(f"r.fecha >= ${len(params)}::date")
+    if fecha_hasta is not None:
+        params.append(fecha_hasta)
+        conditions.append(f"r.fecha <= ${len(params)}::date")
+    if estado is not None:
+        params.append(estado)
+        conditions.append(f"r.estado::text = ${len(params)}")
+
+    return conditions, params
+
+
+async def get_client_reservations(
+    pool: asyncpg.Pool,
+    cliente_id: int,
+    filtro: Optional[str] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    conditions, base_params = _client_reservation_filters(
+        cliente_id, filtro, fecha_desde, fecha_hasta, estado
+    )
+    where_clause = " WHERE " + " AND ".join(conditions)
+    order = "ASC" if filtro == "proximas" else "DESC"
+
+    params = list(base_params)
+    params.append(int(limit))
+    limit_idx = len(params)
+    params.append(int(offset))
+    offset_idx = len(params)
+
+    query = (
+        _CLIENT_RESERVATION_SELECT
+        + where_clause
+        + f" ORDER BY r.fecha {order}, r.hora_inicio {order}"
+        + f" LIMIT ${limit_idx} OFFSET ${offset_idx}"
+    )
+    count_query = "SELECT COUNT(*) FROM reservas AS r" + where_clause
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(query, *params)
+        total = await conn.fetchval(count_query, *base_params)
+
+    return rows, int(total or 0)
+
+
+async def get_client_reservation(
+    pool: asyncpg.Pool, cliente_id: int, reservation_id: int
+):
+    query = (
+        _CLIENT_RESERVATION_SELECT
+        + " WHERE r.cliente_id = $1 AND r.id_reserva = $2"
+    )
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, cliente_id, reservation_id)
+
+
+async def cancel_client_reservation(
+    pool: asyncpg.Pool,
+    cliente_id: int,
+    reservation_id: int,
+    motivo: Optional[str] = None,
+):
+    query = """
+        UPDATE reservas
+        SET estado = 'cancelada'::estado_reserva,
+            motivo = COALESCE($3, motivo),
+            fecha_actualizacion = NOW()
+        WHERE id_reserva = $2
+          AND cliente_id = $1
+          AND estado IN ('pendiente', 'confirmada')
+        RETURNING id_reserva
+    """
+    async with pool.acquire() as conn:
+        updated = await conn.fetchrow(
+            query, cliente_id, reservation_id, motivo
+        )
+        if not updated:
+            return None
+        return await conn.fetchrow(
+            _CLIENT_RESERVATION_SELECT
+            + " WHERE r.cliente_id = $1 AND r.id_reserva = $2",
+            cliente_id,
+            reservation_id,
+        )
+
+
+async def reschedule_reserva_atomic(
+    pool: asyncpg.Pool,
+    negocio_id: int,
+    cliente_id: int,
+    reservation_id: int,
+    fecha: date,
+    hora_inicio: time,
+    hora_fin: time,
+    profesional_id: Optional[int] = None,
+    motivo: Optional[str] = None,
+):
+    """Reprograma una reserva solo si el nuevo espacio sigue libre.
+
+    La reserva actual se excluye de la comprobación de solapamientos y todo
+    ocurre bajo el lock del negocio, igual que en la creación.
+    """
+
+    query = """
+        WITH lock AS (
+            SELECT pg_advisory_xact_lock($2::bigint) AS acquired
+        )
+        UPDATE reservas AS r
+        SET fecha = $3,
+            hora_inicio = $4,
+            hora_fin = $5,
+            profesional_id = $6,
+            motivo = COALESCE($7, r.motivo),
+            fecha_actualizacion = NOW()
+        FROM lock
+        WHERE r.id_reserva = $1
+          AND r.cliente_id = $8
+          AND r.estado IN ('pendiente', 'confirmada')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM reservas AS r2
+              INNER JOIN servicios AS s2 ON s2.id_servicio = r2.servicio_id
+              WHERE s2.negocio_id = $2::bigint
+                AND r2.fecha = $3
+                AND r2.id_reserva <> $1
+                AND r2.estado IN ('pendiente', 'confirmada')
+                AND r2.hora_inicio < $5
+                AND COALESCE(
+                      r2.hora_fin,
+                      r2.hora_inicio
+                        + make_interval(mins => s2.duracion_minutos)
+                    ) > $4
+                AND (
+                      $6::int IS NULL
+                      OR r2.profesional_id = $6
+                      OR r2.profesional_id IS NULL
+                    )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM bloqueos_agenda AS b
+              WHERE b.negocio_id = $2::bigint
+                AND b.fecha = $3
+                AND (
+                      b.hora_inicio IS NULL
+                      OR (b.hora_inicio < $5 AND b.hora_fin > $4)
+                    )
+          )
+        RETURNING r.id_reserva
+    """
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            updated = await conn.fetchrow(
+                query,
+                reservation_id,
+                negocio_id,
+                fecha,
+                hora_inicio,
+                hora_fin,
+                profesional_id,
+                motivo,
+                cliente_id,
+            )
+            if not updated:
+                return None
+            return await conn.fetchrow(
+                _CLIENT_RESERVATION_SELECT
+                + " WHERE r.cliente_id = $1 AND r.id_reserva = $2",
+                cliente_id,
+                reservation_id,
             )
 
 

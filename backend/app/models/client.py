@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import time, date, datetime
 from enum import Enum
@@ -140,26 +140,65 @@ class AvailableTimesResponse(BaseModel):
     bloqueado: bool = False
     motivo_bloqueo: Optional[str] = None
     
-# Modelo para crear reserva
+# Modelo para crear reserva (HU_43)
 class CreateReservationRequest(BaseModel):
-    servicio_id: int
+    negocio_id: Optional[int] = Field(
+        None, ge=1, description="ID del negocio seleccionado por el cliente"
+    )
+    servicio_id: int = Field(..., ge=1)
     fecha: date
     hora_inicio: time
     cliente_id: Optional[int] = None
     hora_fin: Optional[time] = None
-    profesional_id: Optional[int] = None
+    profesional_id: Optional[int] = Field(None, ge=1)
+    comentario: Optional[str] = Field(
+        None, max_length=500, description="Comentario adicional (opcional)"
+    )
 
-# Modelo para respuesta de reserva
-class ReservationResponse(BaseModel):
+# Modelo de respuesta de una reserva vista por el cliente (HU_43, HU_47, HU_49)
+class ClientReservationOut(BaseModel):
     id_reserva: int
     cliente_id: int
+    negocio_id: int
+    negocio_nombre: str
     servicio_id: int
+    servicio_nombre: str
+    duracion_minutos: int
+    precio: float
+    profesional_id: Optional[int] = None
+    profesional_nombre: Optional[str] = None
     fecha: date
     hora_inicio: time
     hora_fin: Optional[time] = None
     estado: EstadoReserva
-    fecha_creacion: datetime
-    profesional_id: Optional[int] = None
+    comentario: Optional[str] = None
+    motivo: Optional[str] = None
+    fecha_creacion: Optional[datetime] = None
+    fecha_actualizacion: Optional[datetime] = None
+
+# Se mantiene el nombre anterior para no romper el contrato existente.
+class ReservationResponse(ClientReservationOut):
+    pass
+
+class ClientReservationListOut(BaseModel):
+    items: List[ClientReservationOut]
+    total: int
+    filtro: Optional[str] = None
+
+# HU_46: cancelación por parte del cliente
+class ClientReservationCancel(BaseModel):
+    motivo: Optional[str] = Field(
+        None, max_length=500, description="Motivo de cancelación (opcional)"
+    )
+
+# HU_50: reprogramación por parte del cliente
+class ClientReservationReschedule(BaseModel):
+    fecha: date
+    hora_inicio: time
+    profesional_id: Optional[int] = Field(None, ge=1)
+    motivo: Optional[str] = Field(
+        None, max_length=500, description="Motivo del cambio (opcional)"
+    )
 
 # Modelo para servicio
 class ServiceView(BaseModel):

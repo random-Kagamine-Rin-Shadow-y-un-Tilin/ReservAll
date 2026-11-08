@@ -6,6 +6,11 @@ from app.models.client import (
     CategoryView,
     AvailableTimesResponse,
     AvailableTimes,
+    ClientReservationCancel,
+    ClientReservationListOut,
+    ClientReservationOut,
+    ClientReservationReschedule,
+    EstadoReserva,
     ReservationResponse,
     CreateReservationRequest,
     ServiceView,
@@ -221,23 +226,173 @@ async def get_available_times_by_service(
         descanso_minutos,
     )
 
-# Endpoints de reservas
-@router.post('/create-reservation', response_model=ReservationResponse)
-async def create_reservation(
+# Endpoints de reservas ------------------------------------------------------
+
+def _current_client_id(current_user: dict) -> int:
+    try:
+        return int(current_user["sub"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión inválida.",
+        )
+
+
+async def _create_reservation(
     reservation: CreateReservationRequest,
-    current_user = Depends(get_current_user),
-    pool: asyncpg.Pool = Depends(get_db_pool)
+    current_user: dict,
+    pool: asyncpg.Pool,
 ):
-    # El cliente_id se obtiene del usuario autenticado
-    cliente_id = int(current_user["sub"])
-    
     return await client_service.create_reservation(
         pool,
-        cliente_id,
+        _current_client_id(current_user),
         reservation.servicio_id,
         reservation.fecha,
         reservation.hora_inicio,
         reservation.profesional_id,
+        negocio_id=reservation.negocio_id,
+        comentario=reservation.comentario,
+    )
+
+
+# HU_43: crear una reserva (ruta nueva y recomendada)
+@router.post(
+    '/reservations',
+    response_model=ReservationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reservation_v2(
+    reservation: CreateReservationRequest,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await _create_reservation(reservation, current_user, pool)
+
+
+# HU_43: ruta anterior, se mantiene por compatibilidad
+@router.post('/create-reservation', response_model=ReservationResponse)
+async def create_reservation(
+    reservation: CreateReservationRequest,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await _create_reservation(reservation, current_user, pool)
+
+
+# HU_53: historial del cliente
+@router.get('/reservations/history', response_model=ClientReservationListOut)
+async def get_my_reservation_history(
+    fecha_desde: Optional[date] = Query(
+        None, description="Fecha inicial (YYYY-MM-DD)"
+    ),
+    fecha_hasta: Optional[date] = Query(
+        None, description="Fecha final (YYYY-MM-DD)"
+    ),
+    estado: Optional[EstadoReserva] = Query(
+        None, description="Estado de la reserva"
+    ),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.get_my_reservation_history(
+        pool,
+        _current_client_id(current_user),
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=estado.value if estado else None,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# HU_47: listar reservas del cliente
+@router.get('/reservations', response_model=ClientReservationListOut)
+async def list_my_reservations(
+    filtro: Optional[str] = Query(
+        None,
+        description="proximas | historial | canceladas | todas",
+    ),
+    fecha_desde: Optional[date] = Query(
+        None, description="Fecha inicial (YYYY-MM-DD)"
+    ),
+    fecha_hasta: Optional[date] = Query(
+        None, description="Fecha final (YYYY-MM-DD)"
+    ),
+    estado: Optional[EstadoReserva] = Query(
+        None, description="Estado de la reserva"
+    ),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.list_my_reservations(
+        pool,
+        _current_client_id(current_user),
+        filtro=filtro,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=estado.value if estado else None,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# HU_49: detalle de una reserva del cliente
+@router.get(
+    '/reservations/{reservation_id}',
+    response_model=ClientReservationOut,
+)
+async def get_my_reservation(
+    reservation_id: int = Path(..., ge=1),
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.get_my_reservation(
+        pool, _current_client_id(current_user), reservation_id
+    )
+
+
+# HU_46: cancelar una reserva propia
+@router.patch(
+    '/reservations/{reservation_id}/cancel',
+    response_model=ClientReservationOut,
+)
+async def cancel_my_reservation(
+    reservation_id: int = Path(..., ge=1),
+    data: ClientReservationCancel | None = None,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.cancel_my_reservation(
+        pool,
+        _current_client_id(current_user),
+        reservation_id,
+        data.motivo if data else None,
+    )
+
+
+# HU_50: reprogramar una reserva propia
+@router.patch(
+    '/reservations/{reservation_id}/reschedule',
+    response_model=ClientReservationOut,
+)
+async def reschedule_my_reservation(
+    data: ClientReservationReschedule,
+    reservation_id: int = Path(..., ge=1),
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.reschedule_my_reservation(
+        pool,
+        _current_client_id(current_user),
+        reservation_id,
+        data.fecha,
+        data.hora_inicio,
+        profesional_id=data.profesional_id,
+        motivo=data.motivo,
     )
 
 # Endpoint para verificar disponibilidad

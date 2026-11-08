@@ -127,14 +127,33 @@ async def get_reservation(
     return OwnerReservationOut(**dict(row))
 
 
+MAX_RESERVATION_TEXT = 500
+
+
+def _validate_motivo(motivo: Optional[str]) -> Optional[str]:
+    if motivo is None:
+        return None
+    motivo = motivo.strip()
+    if not motivo:
+        return None
+    if len(motivo) > MAX_RESERVATION_TEXT:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"El motivo no puede superar los {MAX_RESERVATION_TEXT} caracteres.",
+        )
+    return motivo
+
+
 async def update_reservation_status(
     pool: asyncpg.Pool,
     shop_id: int,
     reservation_id: int,
     current_user_id: int,
     nuevo_estado: str,
+    motivo: Optional[str] = None,
 ):
     await _ensure_shop(pool, shop_id, current_user_id)
+    motivo = _validate_motivo(motivo)
 
     row = await repo.get_reservation(pool, shop_id, reservation_id)
     if not row:
@@ -158,15 +177,120 @@ async def update_reservation_status(
         raise HTTPException(status.HTTP_409_CONFLICT, detalle)
 
     updated = await repo.update_reservation_status(
-        pool, shop_id, reservation_id, nuevo_estado
+        pool,
+        shop_id,
+        reservation_id,
+        nuevo_estado,
+        motivo,
+        expected_estado=estado_actual,
     )
     if not updated:
         raise HTTPException(
-            status.HTTP_404_NOT_FOUND, "Reserva no encontrada."
+            status.HTTP_409_CONFLICT,
+            "La reserva cambió de estado. Vuelve a intentarlo.",
         )
 
     refreshed = await repo.get_reservation(pool, shop_id, reservation_id)
     return OwnerReservationOut(**dict(refreshed))
+
+
+# HU_44: confirmar una reserva pendiente
+async def confirm_reservation(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    reservation_id: int,
+    current_user_id: int,
+):
+    return await update_reservation_status(
+        pool,
+        shop_id,
+        reservation_id,
+        current_user_id,
+        "confirmada",
+    )
+
+
+# HU_45: rechazar una reserva pendiente (se libera el horario)
+async def reject_reservation(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    reservation_id: int,
+    current_user_id: int,
+    motivo: Optional[str] = None,
+):
+    await _ensure_shop(pool, shop_id, current_user_id)
+
+    row = await repo.get_reservation(pool, shop_id, reservation_id)
+    if not row:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Reserva no encontrada."
+        )
+
+    estado_actual = _status_value(row["estado"])
+    if estado_actual != "pendiente":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Solo se pueden rechazar reservas pendientes.",
+        )
+
+    return await update_reservation_status(
+        pool,
+        shop_id,
+        reservation_id,
+        current_user_id,
+        "cancelada",
+        motivo,
+    )
+
+
+# HU_52: completar una reserva confirmada
+async def complete_reservation(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    reservation_id: int,
+    current_user_id: int,
+):
+    return await update_reservation_status(
+        pool,
+        shop_id,
+        reservation_id,
+        current_user_id,
+        "completada",
+    )
+
+
+# HU_53: historial de reservas del negocio
+async def list_reservation_history(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    current_user_id: int,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+    profesional_id: Optional[int] = None,
+    search: Optional[str] = None,
+):
+    await _ensure_shop(pool, shop_id, current_user_id)
+
+    if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La fecha inicial no puede ser posterior a la final.",
+        )
+
+    estados = [estado] if estado else ["completada", "cancelada"]
+    rows = await repo.get_reservations(
+        pool,
+        shop_id,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estados=estados,
+        profesional_id=profesional_id,
+        search=search,
+    )
+
+    items = [OwnerReservationOut(**dict(row)) for row in rows]
+    return ReservationListOut(items=items, summary=_summary(rows))
 
 
 async def list_clients(

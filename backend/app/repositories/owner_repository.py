@@ -34,7 +34,10 @@ _RESERVATION_SELECT = """
             r.hora_inicio + make_interval(mins => s.duracion_minutos)
         ) AS hora_fin,
         r.estado,
-        r.fecha_creacion
+        r.comentario,
+        r.motivo,
+        r.fecha_creacion,
+        r.fecha_actualizacion
     FROM reservas AS r
     INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
     INNER JOIN usuarios  AS u ON u.id = r.cliente_id
@@ -48,6 +51,7 @@ async def get_reservations(
     fecha_desde: Optional[date] = None,
     fecha_hasta: Optional[date] = None,
     estado: Optional[str] = None,
+    estados: Optional[List[str]] = None,
     profesional_id: Optional[int] = None,
     search: Optional[str] = None,
     cliente_id: Optional[int] = None,
@@ -68,6 +72,8 @@ async def get_reservations(
         add("r.fecha <= ${n}::date", fecha_hasta)
     if estado is not None:
         add("r.estado::text = ${n}", estado)
+    if estados:
+        add("r.estado::text = ANY(${n}::text[])", list(estados))
     if profesional_id is not None:
         add("r.profesional_id = ${n}", profesional_id)
     if search:
@@ -105,19 +111,34 @@ async def get_reservation(
 
 
 async def update_reservation_status(
-    pool: asyncpg.Pool, shop_id: int, reservation_id: int, estado: str
+    pool: asyncpg.Pool,
+    shop_id: int,
+    reservation_id: int,
+    estado: str,
+    motivo: Optional[str] = None,
+    expected_estado: Optional[str] = None,
 ):
     query = """
         UPDATE reservas AS r
-        SET estado = $3::estado_reserva
+        SET estado = $3::estado_reserva,
+            motivo = COALESCE($4, r.motivo),
+            fecha_actualizacion = NOW()
         FROM servicios AS s
         WHERE r.servicio_id = s.id_servicio
           AND s.negocio_id = $1
           AND r.id_reserva = $2
+          AND ($5::text IS NULL OR r.estado::text = $5)
         RETURNING r.id_reserva, r.estado::text AS estado
     """
     async with pool.acquire() as conn:
-        return await conn.fetchrow(query, shop_id, reservation_id, estado)
+        return await conn.fetchrow(
+            query,
+            shop_id,
+            reservation_id,
+            estado,
+            motivo,
+            expected_estado,
+        )
 
 
 # Clientes -------------------------------------------------------------------

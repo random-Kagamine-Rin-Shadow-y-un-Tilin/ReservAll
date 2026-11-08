@@ -2,6 +2,8 @@ from fastapi import HTTPException, status
 from app.models.client import (
     AvailableTimes,
     AvailableTimesResponse,
+    ClientReservationListOut,
+    ClientReservationOut,
     DiaSemana,
     ReservationResponse,
     ServiceView,
@@ -601,7 +603,59 @@ async def get_services_by_negocio(
     return [ServiceView(**dict(servicio)) for servicio in servicios]
 
 
-# Crear una nueva reserva
+# Reservas -------------------------------------------------------------------
+
+MAX_RESERVATION_TEXT = 500
+RESERVATION_FILTERS = {"proximas", "historial", "canceladas", "todas"}
+
+
+def _clean_text(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _validate_reservation_text(
+    value: Optional[str], label: str = "comentario"
+) -> Optional[str]:
+    text = _clean_text(value)
+    if text is not None and len(text) > MAX_RESERVATION_TEXT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"El {label} no puede superar los "
+                f"{MAX_RESERVATION_TEXT} caracteres"
+            ),
+        )
+    return text
+
+
+def _reservation_out(row) -> ClientReservationOut:
+    return ClientReservationOut(**dict(row))
+
+
+def _status_value(value) -> str:
+    return value.value if hasattr(value, "value") else str(value)
+
+
+def _normalize_filter(filtro: Optional[str]) -> Optional[str]:
+    if filtro is None:
+        return None
+    value = filtro.strip().lower()
+    if value in ("", "todas"):
+        return None
+    if value not in RESERVATION_FILTERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Filtro inválido. Usa: proximas, historial, canceladas o todas"
+            ),
+        )
+    return value
+
+
+# Crear una nueva reserva (HU_43)
 async def create_reservation(
     pool: asyncpg.Pool,
     cliente_id: int,
@@ -609,7 +663,11 @@ async def create_reservation(
     fecha: date,
     hora_inicio: time,
     profesional_id: Optional[int] = None,
+    negocio_id: Optional[int] = None,
+    comentario: Optional[str] = None,
 ) -> ReservationResponse:
+    comentario = _validate_reservation_text(comentario, "comentario")
+
     # 1. Verificar que el servicio existe y está activo
     servicio = await repo.get_servicio_by_id(pool, servicio_id)
     if not servicio:
@@ -623,8 +681,14 @@ async def create_reservation(
             detail="El servicio no está disponible",
         )
 
-    negocio_id = servicio["negocio_id"]
-    negocio = await repo.get_negocio_by_id(pool, negocio_id)
+    negocio_servicio_id = servicio["negocio_id"]
+    if negocio_id is not None and negocio_id != negocio_servicio_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El servicio no pertenece al negocio seleccionado",
+        )
+
+    negocio = await repo.get_negocio_by_id(pool, negocio_servicio_id)
     if not negocio:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -656,13 +720,13 @@ async def create_reservation(
 
     if profesional_id is not None:
         await _validate_professional_for_service(
-            pool, negocio_id, servicio_id, profesional_id
+            pool, negocio_servicio_id, servicio_id, profesional_id
         )
 
     # 2. Verificar que el horario está disponible
     disponible = await check_availability(
         pool,
-        negocio_id,
+        negocio_servicio_id,
         fecha,
         hora_inicio,
         duracion,
@@ -677,13 +741,14 @@ async def create_reservation(
     # 3. Crear la reserva de forma atómica (evita duplicados concurrentes)
     reserva = await repo.create_reserva_atomic(
         pool,
-        negocio_id,
+        negocio_servicio_id,
         cliente_id,
         servicio_id,
         fecha,
         hora_inicio,
         to_time(inicio + duracion),
         profesional_id,
+        comentario,
     )
     if not reserva:
         raise HTTPException(
@@ -691,7 +756,228 @@ async def create_reservation(
             detail="El horario seleccionado ya no está disponible",
         )
 
-    return ReservationResponse(**dict(reserva))
+    detalle = await repo.get_client_reservation(
+        pool, cliente_id, reserva["id_reserva"]
+    )
+    if detalle:
+        return ReservationResponse(**dict(detalle))
+
+    data = dict(reserva)
+    data.update(
+        {
+            "negocio_id": negocio_servicio_id,
+            "negocio_nombre": negocio["nombre"],
+            "servicio_nombre": servicio["nombre"],
+            "duracion_minutos": duracion,
+            "precio": float(servicio["precio"]),
+        }
+    )
+    return ReservationResponse(**data)
+
+
+# HU_47 / HU_53: reservas e historial del cliente
+async def list_my_reservations(
+    pool: asyncpg.Pool,
+    cliente_id: int,
+    filtro: Optional[str] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> ClientReservationListOut:
+    filtro = _normalize_filter(filtro)
+
+    if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La fecha inicial no puede ser posterior a la final",
+        )
+
+    rows, total = await repo.get_client_reservations(
+        pool,
+        cliente_id,
+        filtro=filtro,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=estado,
+        limit=limit,
+        offset=offset,
+    )
+
+    return ClientReservationListOut(
+        items=[_reservation_out(row) for row in rows],
+        total=total,
+        filtro=filtro,
+    )
+
+
+# HU_49: detalle de una reserva del cliente
+async def get_my_reservation(
+    pool: asyncpg.Pool, cliente_id: int, reservation_id: int
+) -> ClientReservationOut:
+    row = await repo.get_client_reservation(pool, cliente_id, reservation_id)
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reserva no encontrada",
+        )
+    return _reservation_out(row)
+
+
+# HU_46: cancelar una reserva propia
+async def cancel_my_reservation(
+    pool: asyncpg.Pool,
+    cliente_id: int,
+    reservation_id: int,
+    motivo: Optional[str] = None,
+) -> ClientReservationOut:
+    motivo = _validate_reservation_text(motivo, "motivo")
+
+    row = await repo.get_client_reservation(pool, cliente_id, reservation_id)
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reserva no encontrada",
+        )
+
+    estado_actual = _status_value(row["estado"])
+    if estado_actual not in ("pendiente", "confirmada"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Una reserva en estado «{estado_actual}» "
+                "ya no se puede cancelar"
+            ),
+        )
+
+    updated = await repo.cancel_client_reservation(
+        pool, cliente_id, reservation_id, motivo
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La reserva ya no se puede cancelar",
+        )
+    return _reservation_out(updated)
+
+
+# HU_50: reprogramar una reserva propia
+async def reschedule_my_reservation(
+    pool: asyncpg.Pool,
+    cliente_id: int,
+    reservation_id: int,
+    fecha: date,
+    hora_inicio: time,
+    profesional_id: Optional[int] = None,
+    motivo: Optional[str] = None,
+) -> ClientReservationOut:
+    motivo = _validate_reservation_text(motivo, "motivo")
+
+    row = await repo.get_client_reservation(pool, cliente_id, reservation_id)
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reserva no encontrada",
+        )
+
+    estado_actual = _status_value(row["estado"])
+    if estado_actual not in ("pendiente", "confirmada"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Una reserva en estado «{estado_actual}» "
+                "ya no se puede modificar"
+            ),
+        )
+
+    negocio_id = row["negocio_id"]
+    servicio_id = row["servicio_id"]
+    duracion = row["duracion_minutos"] or SLOT_MINUTES
+    if duracion <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La duración del servicio no es válida",
+        )
+
+    inicio = to_minutes(hora_inicio)
+    if inicio + duracion >= 24 * 60:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La reserva no puede terminar a medianoche o después",
+        )
+
+    ahora = datetime.now()
+    if fecha < ahora.date() or (
+        fecha == ahora.date() and hora_inicio <= ahora.time()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede reprogramar a una fecha u hora pasada",
+        )
+
+    if profesional_id is None:
+        profesional_id = row["profesional_id"]
+
+    if profesional_id is not None:
+        await _validate_professional_for_service(
+            pool, negocio_id, servicio_id, profesional_id
+        )
+
+    disponible = await check_availability(
+        pool,
+        negocio_id,
+        fecha,
+        hora_inicio,
+        duracion,
+        profesional_id=profesional_id,
+        exclude_reservation_id=reservation_id,
+    )
+    if not disponible:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El nuevo horario no está disponible",
+        )
+
+    updated = await repo.reschedule_reserva_atomic(
+        pool,
+        negocio_id,
+        cliente_id,
+        reservation_id,
+        fecha,
+        hora_inicio,
+        to_time(inicio + duracion),
+        profesional_id,
+        motivo,
+    )
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El nuevo horario ya no está disponible",
+        )
+    return _reservation_out(updated)
+
+
+# HU_53: historial del cliente (reservas finalizadas o anteriores)
+async def get_my_reservation_history(
+    pool: asyncpg.Pool,
+    cliente_id: int,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> ClientReservationListOut:
+    return await list_my_reservations(
+        pool,
+        cliente_id,
+        filtro="historial",
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=estado,
+        limit=limit,
+        offset=offset,
+    )
 
 
 #  Verificar si un horario específico está disponible
@@ -703,6 +989,7 @@ async def check_availability(
     duracion_minutos: int,
     profesional_id: Optional[int] = None,
     descanso_minutos: int = BREAK_MINUTES,
+    exclude_reservation_id: Optional[int] = None,
 ) -> bool:
     if duracion_minutos <= 0:
         return False
@@ -767,7 +1054,11 @@ async def check_availability(
         return False
 
     reservas = await repo.get_reservas_by_negocio_fecha(
-        pool, negocio_id, fecha, profesional_id
+        pool,
+        negocio_id,
+        fecha,
+        profesional_id,
+        exclude_reservation_id=exclude_reservation_id,
     )
 
     for reserva in reservas:

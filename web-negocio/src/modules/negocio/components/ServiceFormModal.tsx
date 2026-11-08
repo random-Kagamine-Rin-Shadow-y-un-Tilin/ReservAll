@@ -3,15 +3,16 @@ import { LuCheck, LuSparkles } from "react-icons/lu";
 import { Modal } from "../../../shared/components/Modal";
 import { Button } from "../../../shared/components/ui/Button";
 import { Field, Input, Select, Textarea } from "../../../shared/components/ui/Field";
-import { createService } from "../api";
+import { createService, editService } from "../api";
 import { SERVICE_CATEGORIES } from "../constants";
-import type { Professional } from "../types";
+import type { Professional, Service } from "../types";
 
 interface ServiceFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   shopId: number;
   professionals: Professional[];
+  service?: Service | null;
   onSaved: () => Promise<void> | void;
 }
 
@@ -20,6 +21,7 @@ export function ServiceFormModal({
   onClose,
   shopId,
   professionals,
+  service = null,
   onSaved,
 }: ServiceFormModalProps) {
   const [nombre, setNombre] = useState("");
@@ -28,21 +30,28 @@ export function ServiceFormModal({
   const [precio, setPrecio] = useState("0");
   const [categoria, setCategoria] = useState("servicio");
   const [cantidad, setCantidad] = useState("1");
+  const [estado, setEstado] = useState(true);
   const [profesionalIds, setProfesionalIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const editing = Boolean(service);
+
   useEffect(() => {
     if (!isOpen) return;
-    setNombre("");
-    setDescripcion("");
-    setDuracion("60");
-    setPrecio("0");
-    setCategoria("servicio");
-    setCantidad("1");
-    setProfesionalIds([]);
+    setNombre(service?.nombre ?? "");
+    setDescripcion(service?.descripcion ?? "");
+    setDuracion(String(service?.duracion_minutos ?? 60));
+    setPrecio(String(service?.precio ?? 0));
+    setCategoria(service?.categoria_servicio ?? "servicio");
+    setCantidad(String(service?.cantidad_servicio ?? 1));
+    setEstado(service?.estado_servicio ?? true);
+    setProfesionalIds(
+      service?.profesionales?.map((professional) => professional.id_profesional) ??
+        [],
+    );
     setError(null);
-  }, [isOpen]);
+  }, [isOpen, service]);
 
   function toggleProfessional(id: number) {
     setProfesionalIds((current) =>
@@ -77,22 +86,34 @@ export function ServiceFormModal({
       return;
     }
 
+    const payload = {
+      nombre: nombre.trim(),
+      descripcion: descripcion.trim() || null,
+      duracion_minutos: duration,
+      precio: price,
+      categoria_servicio: categoria,
+      cantidad_servicio: quantity,
+      estado_servicio: estado,
+      profesional_ids: profesionalIds,
+    };
+
     setLoading(true);
     try {
-      await createService(shopId, {
-        nombre: nombre.trim(),
-        descripcion: descripcion.trim() || null,
-        duracion_minutos: duration,
-        precio: price,
-        categoria_servicio: categoria,
-        cantidad_servicio: quantity,
-        estado_servicio: true,
-        profesional_ids: profesionalIds,
-      });
+      if (service) {
+        await editService(shopId, service.id_servicio, payload);
+      } else {
+        await createService(shopId, payload);
+      }
       await onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No pudimos registrar el servicio.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : editing
+            ? "No pudimos actualizar el servicio."
+            : "No pudimos registrar el servicio.",
+      );
     } finally {
       setLoading(false);
     }
@@ -102,8 +123,12 @@ export function ServiceFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Nuevo servicio"
-      description="Define qué ofreces, cuánto dura y quién puede atenderlo."
+      title={editing ? "Editar servicio" : "Nuevo servicio"}
+      description={
+        editing
+          ? "Actualiza la información, el equipo y la visibilidad del servicio."
+          : "Define qué ofreces, cuánto dura y quién puede atenderlo."
+      }
     >
       <div className="space-y-4">
         <Field label="Nombre del servicio" htmlFor="service-name" required>
@@ -181,6 +206,29 @@ export function ServiceFormModal({
           </Field>
         </div>
 
+        <label
+          htmlFor="service-active"
+          className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border/70 bg-surface/60 px-4 py-3"
+        >
+          <span>
+            <span className="block text-sm font-semibold text-foreground">
+              Servicio activo
+            </span>
+            <span className="mt-0.5 block text-xs text-secondary-text">
+              {estado
+                ? "Tus clientes pueden reservarlo."
+                : "No aparecerá disponible para reservar."}
+            </span>
+          </span>
+          <input
+            id="service-active"
+            type="checkbox"
+            checked={estado}
+            onChange={(event) => setEstado(event.target.checked)}
+            className="size-5 shrink-0 accent-primary"
+          />
+        </label>
+
         <div>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">Profesionales</p>
@@ -245,7 +293,7 @@ export function ServiceFormModal({
             loading={loading}
             leftIcon={<LuSparkles size={15} />}
           >
-            Guardar servicio
+            {editing ? "Guardar cambios" : "Guardar servicio"}
           </Button>
         </div>
       </div>

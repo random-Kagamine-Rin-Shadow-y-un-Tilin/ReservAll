@@ -19,7 +19,10 @@ export interface Reservation {
   hora_inicio: string;
   hora_fin: string | null;
   estado: ReservationStatus;
+  comentario: string | null;
+  motivo: string | null;
   fecha_creacion: string | null;
+  fecha_actualizacion: string | null;
 }
 
 export interface ReservationSummary {

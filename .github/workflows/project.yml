@@ -1,0 +1,22 @@
+name: Agregar a GitHub Project
+
+# Agrega automáticamente issues y PRs nuevos al tablero de GitHub Projects V2.
+# Requiere:
+#   - Variable del repo PROJECT_URL (ej. https://github.com/users/<usuario>/projects/1)
+#   - Secreto PROJECT_TOKEN (PAT classic con scopes: project, repo)
+# Si ya lo haces con Make o con el workflow "Auto-add" del Project, no actives la variable.
+on:
+  issues:
+    types: [opened, reopened, transferred]
+  pull_request_target:
+    types: [opened, reopened]
+
+jobs:
+  add-to-project:
+    if: vars.PROJECT_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: ${{ vars.PROJECT_URL }}
+          github-token: ${{ secrets.PROJECT_TOKEN }}

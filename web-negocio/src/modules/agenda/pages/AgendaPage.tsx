@@ -380,13 +380,13 @@ export function AgendaPage() {
                   ))}
               </Select>
             </Field>
-            <Field label="Profesional" htmlFor="agenda-professional">
+            <Field label="Personal" htmlFor="agenda-professional">
               <Select
                 id="agenda-professional"
                 value={profesionalId}
                 onChange={(event) => setProfesionalId(event.target.value)}
               >
-                <option value="">Todo el equipo</option>
+                <option value="">Todo el personal</option>
                 {professionals.map((professional) => (
                   <option
                     key={professional.id_profesional}

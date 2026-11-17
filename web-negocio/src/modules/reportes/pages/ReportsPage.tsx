@@ -108,7 +108,7 @@ function downloadReport(report: Report) {
       service.ingresos,
     ]),
     [],
-    ["Profesional", "Reservas", "Completadas", "Ingresos"],
+    ["Personal", "Reservas", "Completadas", "Ingresos"],
     ...report.profesionales_top.map((professional) => [
       professional.nombre,
       professional.reservas,
@@ -721,13 +721,13 @@ export function ReportsPage() {
             <Card>
               <CardHeader
                 title="Rendimiento del equipo"
-                subtitle="Citas atendidas por profesional"
+                subtitle="Citas atendidas por el personal"
                 icon={<LuUsers />}
               />
               <div className="space-y-4 p-4">
                 {report.profesionales_top.length === 0 ? (
                   <p className="text-sm text-secondary-text">
-                    Asigna profesionales a las reservas para ver su rendimiento.
+                    Asigna personal a las reservas para ver su rendimiento.
                   </p>
                 ) : (
                   report.profesionales_top.map((professional, index) => (

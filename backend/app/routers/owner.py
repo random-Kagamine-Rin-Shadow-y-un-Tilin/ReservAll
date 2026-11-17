@@ -14,6 +14,7 @@ from app.models.owner import (
     ReservationListOut,
     ReservationRejectRequest,
     ReservationStatusUpdate,
+    ReservationUpdate,
 )
 from app.services import owner_service
 
@@ -89,6 +90,26 @@ async def get_reservation(
 ):
     return await owner_service.get_reservation(
         pool, shop_id, reservation_id, int(current_user["sub"])
+    )
+
+
+@router.patch(
+    "/{shop_id}/reservations/{reservation_id}",
+    response_model=OwnerReservationOut,
+)
+async def update_reservation(
+    shop_id: int,
+    reservation_id: int,
+    data: ReservationUpdate,
+    current_user: dict = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await owner_service.update_reservation(
+        pool,
+        shop_id,
+        reservation_id,
+        int(current_user["sub"]),
+        profesional_id=data.profesional_id,
     )
 
 

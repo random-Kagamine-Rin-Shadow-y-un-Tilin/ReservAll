@@ -34,7 +34,7 @@ const groups: { label: string; items: NavEntry[] }[] = [
     label: "Operación",
     items: [
       { to: "/servicios", label: "Servicios", icon: LuListChecks },
-      { to: "/profesionales", label: "Profesionales", icon: LuUsers },
+      { to: "/profesionales", label: "Personal", icon: LuUsers },
       { to: "/horarios", label: "Horarios", icon: LuClock },
       { to: "/agenda", label: "Agenda", icon: LuCalendar },
       { to: "/reservas", label: "Reservas", icon: LuCalendar },

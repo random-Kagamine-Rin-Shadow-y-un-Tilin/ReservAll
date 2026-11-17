@@ -180,7 +180,7 @@ export function ServicesPage() {
             <Badge tone="success" dot>
               {activeCount} activos
             </Badge>
-            <Badge tone="neutral">{professionals.length} profesionales</Badge>
+            <Badge tone="neutral">{professionals.length} en el personal</Badge>
           </div>
 
           {notice && (
@@ -252,7 +252,7 @@ export function ServicesPage() {
                   <div className="mt-4 flex-1">
                     <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-secondary-text">
                       <LuUsers size={11} />
-                      Profesionales
+                      Personal
                     </p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {service.profesionales.length > 0 ? (

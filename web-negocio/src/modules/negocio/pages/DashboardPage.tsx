@@ -167,7 +167,7 @@ export function DashboardPage() {
         <PageHeader
           eyebrow="Primer paso"
           title="Bienvenido a ReservAll"
-          description="Registra tu negocio para comenzar a organizar servicios, profesionales y horarios."
+          description="Registra tu negocio para comenzar a organizar servicios, personal y horarios."
         />
         <Card className="p-8 text-center">
           <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary-tint text-2xl text-primary">
@@ -199,7 +199,7 @@ export function DashboardPage() {
     { label: "Dirección del local", done: Boolean(profile?.direccion), to: "/negocio" },
     { label: "Al menos un servicio", done: services.length > 0, to: "/servicios" },
     {
-      label: "Equipo de profesionales",
+      label: "Personal del negocio",
       done: professionals.length > 0,
       to: "/profesionales",
     },

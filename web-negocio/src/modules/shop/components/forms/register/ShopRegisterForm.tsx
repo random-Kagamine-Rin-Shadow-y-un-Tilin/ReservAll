@@ -209,7 +209,7 @@ export function ShopRegisterForm() {
             Fase 1
           </p>
           <p className="mt-2 text-sm leading-relaxed text-secondary-text">
-            El perfil del negocio, los servicios, los profesionales y los horarios ya
+            El perfil del negocio, los servicios, el personal y los horarios ya
             están disponibles. Las reservas y los reportes llegarán después.
           </p>
         </div>

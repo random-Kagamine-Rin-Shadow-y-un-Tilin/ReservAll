@@ -56,18 +56,6 @@ export function AuthLayout({
             })}
           </ul>
         </div>
-
-        <div className="relative flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-highlight-soft text-lg text-foreground">
-            R
-          </span>
-          <div>
-            <p className="text-sm font-semibold">ReservAll · Fase 1</p>
-            <p className="text-xs text-white/70">
-              Perfil, servicios, profesionales y horarios.
-            </p>
-          </div>
-        </div>
       </aside>
 
       <main className="flex min-h-screen items-center justify-center px-4 py-10 sm:px-8">

@@ -1,5 +1,19 @@
 # Migraciones
 
+## 003_direcciones_negocio_ubicacion.sql
+
+Prepara `public.direcciones_negocio` para la épica 07 (ubicaciones y mapas):
+
+- Índice por `negocio_id` para leer/actualizar la dirección de un negocio.
+- Índice parcial por `(latitud, longitud)` para los filtros del mapa.
+- Restricciones de rango para latitud y longitud (`NOT VALID`, para no romper
+  registros anteriores).
+- Índice único por `negocio_id`, solo si no hay direcciones duplicadas.
+
+```powershell
+psql "$env:DATABASE_URL" -f migrations/003_direcciones_negocio_ubicacion.sql
+```
+
 ## 001_create_bloqueos_agenda.sql
 
 Crea la tabla `public.bloqueos_agenda`, necesaria para las HU_22 (bloquear

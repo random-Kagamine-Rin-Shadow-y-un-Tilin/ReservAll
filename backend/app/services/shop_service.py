@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from app.models.shop import ShopRegister, ShopEdit
 from app.models.shop_contact import ShopContactRegister, ShopContactUpdate
 from app.models.shop_schedule import ShopRegisterSchedule, ShopScheduleUpdate
-from app.models.shop_address import ShopAddressRegister
+from app.models.shop_address import ShopAddressRegister, ShopAddressUpdate
 from app.core.schedule_utils import normalize_day
 from app.repositories import shop_repository as shop_repo
 from app.repositories import shop_contact_repository as contact_repo
@@ -148,10 +148,72 @@ async def insert_address(pool:asyncpg.Pool,
         data.longitud,
         data.osm_id,
         data.numero_local,
-        data.numero_interior
+        data.numero_interior or None
     )
     
     return address
+
+
+async def edit_address(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    current_user_id: int,
+    data: ShopAddressUpdate,
+):
+    """Corrige o mueve la ubicación ya registrada de un negocio."""
+
+    shop = await shop_repo.get_shop_by_id(pool, shop_id)
+    if not shop:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Negocio no encontrado.")
+
+    if shop["dueno_id"] != current_user_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "No tienes permiso para editar este negocio.",
+        )
+
+    existing = await address_repo.get_shop_address(pool, shop_id)
+    if not existing:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "El negocio todavía no tiene una dirección registrada.",
+        )
+
+    fields = data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "No hay cambios para guardar.",
+        )
+
+    non_nullable = {
+        "direccion_calle",
+        "ciudad",
+        "estado",
+        "codigo_postal",
+        "pais",
+        "latitud",
+        "longitud",
+        "numero_local",
+    }
+    for column in non_nullable.intersection(fields):
+        if fields[column] is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"El campo '{column}' no puede ser nulo.",
+            )
+
+    if "numero_interior" in fields and fields["numero_interior"] == "":
+        fields["numero_interior"] = None
+
+    updated = await address_repo.update_address(pool, shop_id, fields)
+    if not updated:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "El negocio todavía no tiene una dirección registrada.",
+        )
+    return updated
+
         
 #SERVICE FOR SCHEDULE
 

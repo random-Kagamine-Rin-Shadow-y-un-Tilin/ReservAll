@@ -77,9 +77,9 @@ export interface ShopAddressInfo{
     pais: string
     latitud: number
     longitud: number
-    osm_id: string
+    osm_id: string | null
     numero_local: string
-    numero_interior: string
+    numero_interior: string | null
 }
 
 export interface ShopAddressRegister{
@@ -93,6 +93,10 @@ export interface ShopAddressRegister{
     osm_id: string
     numero_local: string
     numero_interior: string
+}
+
+export type ShopAddressUpdate = Partial<Omit<ShopAddressRegister, "numero_interior">> & {
+    numero_interior?: string | null
 }
 
 //Full profile

@@ -68,7 +68,7 @@ export function ProfessionalsPage() {
       .catch((err) => {
         if (!active) return;
         setError(
-          err instanceof Error ? err.message : "No pudimos cargar el equipo.",
+          err instanceof Error ? err.message : "No pudimos cargar el personal.",
         );
       })
       .finally(() => {
@@ -106,7 +106,7 @@ export function ProfessionalsPage() {
       setDeleteError(
         err instanceof Error
           ? err.message
-          : "No pudimos desactivar al profesional.",
+          : "No pudimos desactivar al miembro del personal.",
       );
     } finally {
       setDeleting(false);
@@ -114,7 +114,7 @@ export function ProfessionalsPage() {
   }
 
   if (shopLoading || loading) {
-    return <PageLoader label="Cargando tu equipo..." />;
+    return <PageLoader label="Cargando tu personal..." />;
   }
 
   if (!selectedShop) {
@@ -122,7 +122,7 @@ export function ProfessionalsPage() {
       <EmptyState
         icon={<LuUsers />}
         title="Primero registra tu negocio"
-        description="Necesitas un negocio para poder agregar profesionales."
+        description="Necesitas un negocio para poder agregar personal."
         action={
           <Link to="/negocio/registrar">
             <Button size="sm">Registrar negocio</Button>
@@ -136,11 +136,11 @@ export function ProfessionalsPage() {
     <div>
       <PageHeader
         eyebrow="Equipo"
-        title="Profesionales"
-        description="Las personas que atienden tus servicios. Podrás asignarlos al crear cada servicio."
+        title="Personal"
+        description="Las personas que atienden tus servicios. Podrás asignarlas al crear cada servicio o al editar una reserva."
         actions={
           <Button leftIcon={<LuPlus size={16} />} onClick={openCreate}>
-            Nuevo profesional
+            Agregar personal
           </Button>
         }
       />
@@ -150,31 +150,31 @@ export function ProfessionalsPage() {
       ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="secondary">{professionals.length} activos</Badge>
-            <Badge tone="neutral">Se muestran solo profesionales activos</Badge>
+            <Badge tone="secondary">{professionals.length} en activo</Badge>
+            <Badge tone="neutral">Se muestran solo los miembros activos del personal</Badge>
           </div>
 
           <div className="flex items-start gap-2.5 rounded-xl border border-highlight/20 bg-highlight-tint/50 px-4 py-3">
             <LuInfo size={17} className="mt-0.5 shrink-0 text-highlight" />
             <p className="text-xs leading-relaxed text-secondary-text">
-              Al eliminar a un profesional, su cuenta se marca como{" "}
+              Al eliminar a un miembro del personal, su cuenta se marca como{" "}
               <strong>inactiva</strong> en lugar de borrarse. Dejará de aparecer en este
-              listado y en los servicios nuevos.
+              listado, en los servicios nuevos y en las reservas nuevas.
             </p>
           </div>
 
           {professionals.length === 0 ? (
             <EmptyState
               icon={<LuUserPlus />}
-              title="Tu equipo está vacío"
-              description="Agrega a la primera persona que atiende tus servicios."
+              title="Todavía no tienes personal"
+              description="Agrega a la primera persona de tu personal."
               action={
                 <Button
                   size="sm"
                   leftIcon={<LuPlus size={15} />}
                   onClick={openCreate}
                 >
-                  Agregar profesional
+                  Agregar personal
                 </Button>
               }
             />
@@ -250,14 +250,14 @@ export function ProfessionalsPage() {
       <Modal
         isOpen={Boolean(toDelete)}
         onClose={() => setToDelete(null)}
-        title="Desactivar profesional"
+        title="Desactivar personal"
         size="sm"
       >
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-secondary-text">
             ¿Seguro que quieres desactivar a{" "}
             <strong className="text-foreground">{toDelete?.nombre}</strong>? Dejará de
-            aparecer en el listado y no podrá asignarse a servicios nuevos.
+            aparecer en el listado y no podrá asignarse a servicios ni reservas nuevas.
           </p>
 
           {deleteError && (

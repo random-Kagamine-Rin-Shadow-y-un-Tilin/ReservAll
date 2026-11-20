@@ -18,6 +18,17 @@ class ReservationRejectRequest(BaseModel):
     )
 
 
+class ReservationUpdate(BaseModel):
+    profesional_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description=(
+            "Miembro del personal asignado a la reserva. "
+            "Envíalo en null para dejarla sin asignar."
+        ),
+    )
+
+
 class OwnerReservationOut(BaseModel):
     id_reserva: int
     cliente_id: int

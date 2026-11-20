@@ -4,6 +4,7 @@ import type {
   ReservationFilters,
   ReservationListResponse,
   ReservationStatus,
+  ReservationUpdatePayload,
 } from "./types";
 
 export function getReservations(
@@ -52,6 +53,19 @@ export function getReservationHistory(
     `/owner/${shopId}/reservations/history${query}`,
     {},
     "No pudimos cargar el historial de reservas.",
+  );
+}
+
+export function updateReservation(
+  shopId: number,
+  reservationId: number,
+  payload: ReservationUpdatePayload,
+): Promise<Reservation> {
+  return jsonRequest(
+    `/owner/${shopId}/reservations/${reservationId}`,
+    "PATCH",
+    payload,
+    "No pudimos actualizar la reserva.",
   );
 }
 

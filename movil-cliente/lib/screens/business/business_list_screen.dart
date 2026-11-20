@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '/models/shop.dart';
 import '/services/api_service.dart';
+import '/services/location_service.dart';
 
 class BusinessListScreen extends StatefulWidget {
   final String? category;
@@ -13,6 +14,8 @@ class BusinessListScreen extends StatefulWidget {
 }
 
 class _BusinessListScreenState extends State<BusinessListScreen> {
+  static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25];
+
   List<Shop> shops = [];
   List<ShopCategory> categories = [];
   bool isLoading = false;
@@ -32,6 +35,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   TimeOfDay? disponibleHora;
   double? latitud;
   double? longitud;
+  double radioKm = 5;
   bool locating = false;
 
   final Color primaryColor = const Color(0xFFE2725B);
@@ -107,7 +111,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     });
 
     try {
-      final result = await searchCatalog(
+      var result = await searchCatalog(
         q: query,
         categoriaId: selectedCategoryId,
         categoria: selectedCategoryId == null && selectedCategory != "Todos"
@@ -116,11 +120,23 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         ciudad: ciudad.isEmpty ? null : ciudad,
         lat: latitud,
         lng: longitud,
-        radioKm: latitud != null && longitud != null ? 25 : null,
+        radioKm: _hasLocation ? radioKm : null,
         fecha: disponibleFecha == null ? null : _formatDate(disponibleFecha!),
         hora: disponibleHora == null ? null : _formatTime(disponibleHora!),
         orden: orden,
       );
+
+      if (_hasLocation) {
+        result = LocationService.attachDistancesAndSort(
+          result,
+          userLat: latitud!,
+          userLng: longitud!,
+          maxRadiusKm: radioKm,
+        );
+        if (orden != "distancia") {
+          _sortShops(result, orden);
+        }
+      }
 
       if (!mounted || requestId != _requestId) return;
       setState(() {
@@ -134,6 +150,40 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         isLoading = false;
         errorMessage = "No se pudieron cargar los negocios. Intenta de nuevo.";
       });
+    }
+  }
+
+  void _sortShops(List<Shop> list, String sortKey) {
+    switch (sortKey) {
+      case "nombre":
+        list.sort(
+          (a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()),
+        );
+        break;
+      case "precio_asc":
+        list.sort(
+          (a, b) => (a.precioMinimo ?? double.infinity)
+              .compareTo(b.precioMinimo ?? double.infinity),
+        );
+        break;
+      case "precio_desc":
+        list.sort(
+          (a, b) => (b.precioMaximo ?? b.precioMinimo ?? -1)
+              .compareTo(a.precioMaximo ?? a.precioMinimo ?? -1),
+        );
+        break;
+      case "populares":
+        list.sort(
+          (a, b) => (b.valoracion ?? -1).compareTo(a.valoracion ?? -1),
+        );
+        break;
+      case "distancia":
+      default:
+        list.sort(
+          (a, b) => (a.distanciaKm ?? double.infinity)
+              .compareTo(b.distanciaKm ?? double.infinity),
+        );
+        break;
     }
   }
 
@@ -169,6 +219,12 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   void _changeSort(String? value) {
     if (value == null) return;
     setState(() => orden = value);
+    _loadShops();
+  }
+
+  void _selectRadius(double radius) {
+    if (radioKm == radius) return;
+    setState(() => radioKm = radius);
     _loadShops();
   }
 
@@ -231,16 +287,26 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     _loadShops();
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool openSettings = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: openSettings
+            ? SnackBarAction(
+                label: "Ajustes",
+                onPressed: () async {
+                  await Geolocator.openAppSettings();
+                },
+              )
+            : null,
+      ),
+    );
   }
 
   Future<void> _useMyLocation() async {
-    if (latitud != null && longitud != null) {
+    if (_hasLocation) {
       setState(() {
         latitud = null;
         longitud = null;
@@ -252,35 +318,21 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
 
     setState(() => locating = true);
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+      final locationResult = await LocationService.getCurrentLocation();
+      if (!mounted) return;
+
+      if (!locationResult.isSuccess || locationResult.position == null) {
         _showMessage(
-          "Activa la ubicación del dispositivo para usar esta opción.",
+          locationResult.errorMessage ??
+              "No se pudo obtener tu ubicación. Intenta de nuevo.",
+          openSettings: locationResult.openSettingsSuggested,
         );
         return;
       }
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        _showMessage("No se otorgó permiso para acceder a la ubicación.");
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-        ),
-      );
-
-      if (!mounted) return;
       setState(() {
-        latitud = position.latitude;
-        longitud = position.longitude;
+        latitud = locationResult.position!.latitude;
+        longitud = locationResult.position!.longitude;
         orden = "distancia";
       });
       _loadShops();
@@ -304,6 +356,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       disponibleHora = null;
       latitud = null;
       longitud = null;
+      radioKm = 5;
     });
     _loadShops();
   }
@@ -341,6 +394,15 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     }
     final value = shop.precioMinimo ?? shop.precioMaximo!;
     return "Desde \$${value.toStringAsFixed(0)}";
+  }
+
+  String _distanceLabel(Shop shop) {
+    final dist = shop.distanciaKm;
+    if (dist == null) return "";
+    if (dist < 1.0) {
+      return "${(dist * 1000).round()} m";
+    }
+    return "${dist.toStringAsFixed(1)} km";
   }
 
   @override
@@ -398,6 +460,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           ),
           _buildCategoryChips(),
           _buildFilterBar(),
+          if (_hasLocation) _buildRadiusChips(),
           const SizedBox(height: 4),
           Expanded(child: _buildBody()),
         ],
@@ -440,6 +503,48 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     );
   }
 
+  Widget _buildRadiusChips() {
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+        itemCount: _radiusOptionsKm.length + 1,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Center(
+              child: Text(
+                "Radio:",
+                style: TextStyle(
+                  color: textSecondaryColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            );
+          }
+
+          final radius = _radiusOptionsKm[index - 1];
+          final isSelected = radioKm == radius;
+          return ChoiceChip(
+            visualDensity: VisualDensity.compact,
+            label: Text("${radius.toStringAsFixed(0)} km"),
+            selected: isSelected,
+            backgroundColor: surfaceColor,
+            selectedColor: primaryColor,
+            onSelected: (_) => _selectRadius(radius),
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : textMainColor,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   bool get _hasLocation => latitud != null && longitud != null;
 
   Widget _buildFilterBar() {
@@ -450,49 +555,39 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         ? orden
         : "relevancia";
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: surfaceColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: sortValue,
-                  isExpanded: true,
-                  icon: Icon(Icons.sort, color: primaryColor),
-                  items: sortEntries
-                      .map(
-                        (entry) => DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(
-                            entry.value,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: textMainColor),
-                          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: sortValue,
+                icon: Icon(Icons.sort, color: primaryColor),
+                items: sortEntries
+                    .map(
+                      (entry) => DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(
+                          entry.value,
+                          style: TextStyle(color: textMainColor, fontSize: 13),
                         ),
-                      )
-                      .toList(),
-                  onChanged: _changeSort,
-                ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _changeSort,
               ),
             ),
           ),
           const SizedBox(width: 6),
-          _filterButton(
-            icon: _hasLocation ? Icons.my_location : Icons.near_me_outlined,
-            active: _hasLocation,
-            busy: locating,
-            tooltip: _hasLocation
-                ? "Quitar ubicación actual"
-                : "Buscar negocios cerca de mí",
-            onPressed: locating ? null : _useMyLocation,
-          ),
+          _nearbyActionButton(),
           const SizedBox(width: 6),
           _filterButton(
             icon: Icons.location_on_outlined,
@@ -517,6 +612,37 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _nearbyActionButton() {
+    return TextButton.icon(
+      onPressed: locating ? null : _useMyLocation,
+      style: TextButton.styleFrom(
+        backgroundColor: _hasLocation ? secondaryColor : surfaceColor,
+        foregroundColor: _hasLocation ? Colors.white : primaryColor,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      icon: locating
+          ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: _hasLocation ? Colors.white : primaryColor,
+              ),
+            )
+          : Icon(
+              _hasLocation ? Icons.my_location : Icons.near_me_outlined,
+              size: 18,
+            ),
+      label: Text(
+        _hasLocation
+            ? "Cerca · ${radioKm.toStringAsFixed(0)} km"
+            : "Cercanos",
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -587,7 +713,9 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           padding: const EdgeInsets.all(24),
           child: Text(
             _hasActiveFilters
-                ? "No se encontraron negocios con los filtros seleccionados."
+                ? _hasLocation
+                      ? "No se encontraron negocios dentro de ${radioKm.toStringAsFixed(0)} km con los filtros seleccionados."
+                      : "No se encontraron negocios con los filtros seleccionados."
                 : "No hay negocios registrados por el momento.",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: textSecondaryColor),
@@ -610,6 +738,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   Widget _buildShopCard(Shop shop) {
     final imageUrl = _getImageUrl(shop.imagenNegocio);
     final address = shop.direccion ?? shop.ciudad ?? "Ubicación no registrada";
+    final distanceText = _distanceLabel(shop);
 
     return Card(
       color: surfaceColor,
@@ -673,7 +802,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                             ),
                           ),
                         ),
-                        if (shop.distanciaKm != null) ...[
+                        if (distanceText.isNotEmpty) ...[
                           const SizedBox(width: 8),
                           Icon(
                             Icons.near_me,
@@ -682,7 +811,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                           ),
                           const SizedBox(width: 2),
                           Text(
-                            "${shop.distanciaKm!.toStringAsFixed(1)} km",
+                            distanceText,
                             style: TextStyle(
                               color: textSecondaryColor,
                               fontSize: 11,

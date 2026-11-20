@@ -46,3 +46,7 @@ export interface ReservationFilters {
   profesional_id?: number;
   search?: string;
 }
+
+export interface ReservationUpdatePayload {
+  profesional_id: number | null;
+}

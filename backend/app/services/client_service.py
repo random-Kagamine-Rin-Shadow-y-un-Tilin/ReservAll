@@ -227,6 +227,100 @@ async def search_catalog(
     return result
 
 
+def _validate_map_filters(
+    *,
+    lat: Optional[float],
+    lng: Optional[float],
+    radio_km: Optional[float],
+    min_lat: Optional[float],
+    max_lat: Optional[float],
+    min_lng: Optional[float],
+    max_lng: Optional[float],
+) -> None:
+    if (lat is None) != (lng is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debes enviar latitud y longitud juntas.",
+        )
+
+    if radio_km is not None and (lat is None or lng is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El radio de búsqueda requiere latitud y longitud.",
+        )
+
+    bounds = (min_lat, max_lat, min_lng, max_lng)
+    if any(value is not None for value in bounds) and not all(
+        value is not None for value in bounds
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Para filtrar por zona envía min_lat, max_lat, min_lng y "
+                "max_lng juntos."
+            ),
+        )
+
+    if all(value is not None for value in bounds):
+        if min_lat > max_lat:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="min_lat no puede ser mayor que max_lat.",
+            )
+        if min_lng > max_lng:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="min_lng no puede ser mayor que max_lng.",
+            )
+
+
+async def list_map_shops(
+    pool: asyncpg.Pool,
+    *,
+    q: Optional[str] = None,
+    categoria_id: Optional[int] = None,
+    ciudad: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radio_km: Optional[float] = None,
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lng: Optional[float] = None,
+    max_lng: Optional[float] = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[dict]:
+    """Negocios con coordenadas para pintar marcadores en el mapa."""
+
+    _validate_map_filters(
+        lat=lat,
+        lng=lng,
+        radio_km=radio_km,
+        min_lat=min_lat,
+        max_lat=max_lat,
+        min_lng=min_lng,
+        max_lng=max_lng,
+    )
+
+    shops = await repo.list_map_shops(
+        pool,
+        q=q.strip() if q else None,
+        categoria_id=categoria_id,
+        ciudad=ciudad.strip() if ciudad else None,
+        lat=lat,
+        lng=lng,
+        radio_km=radio_km,
+        min_lat=min_lat,
+        max_lat=max_lat,
+        min_lng=min_lng,
+        max_lng=max_lng,
+        limit=limit,
+        offset=offset,
+    )
+
+    return [dict(shop) for shop in shops]
+
+
 async def list_categories(pool: asyncpg.Pool) -> list[dict]:
     categories = await repo.get_categories(pool)
     return [dict(category) for category in categories]

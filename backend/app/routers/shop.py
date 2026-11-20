@@ -3,7 +3,7 @@ from app.core.dependencies import get_db_pool, verify_api_key, get_current_user
 from app.models.shop import ShopRegister, ShopOut, ShopFullProfileOut, ShopEdit, ShopStatusUpdate
 from app.models.shop_contact import ShopContactRegister, ShopContactOut, ShopContactUpdate
 from app.models.shop_schedule import ShopRegisterSchedule, ShopScheduleOut, ShopScheduleUpdate
-from app.models.shop_address import ShopAddressOut, ShopAddressRegister
+from app.models.shop_address import ShopAddressOut, ShopAddressRegister, ShopAddressUpdate
 from app.services import shop_service
 from app.core.storage import upload_img
 
@@ -153,6 +153,18 @@ async def resgiter_address(
     current_user: dict = Depends(get_current_user)
 ):
     address = await shop_service.insert_address(pool, shop_id, int(current_user['sub']), data)
+    return dict(address)
+
+@router.put("/edit-address/{shop_id}", response_model=ShopAddressOut)
+async def edit_address(
+    shop_id: int,
+    data: ShopAddressUpdate,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user),
+):
+    address = await shop_service.edit_address(
+        pool, shop_id, int(current_user["sub"]), data
+    )
     return dict(address)
 
 @router.put("/edit-contact/{shop_id}/{contact_id}", response_model=ShopContactOut)

@@ -8,6 +8,7 @@ import {
   LuFilter,
   LuHistory,
   LuMail,
+  LuPencil,
   LuRefreshCw,
   LuSearch,
   LuUser,
@@ -22,6 +23,7 @@ import {
   getReservationHistory,
   getReservations,
   rejectReservation,
+  updateReservation,
   updateReservationStatus,
 } from "../api";
 import {
@@ -173,6 +175,10 @@ export function ReservationsPage() {
   const [statusMotivo, setStatusMotivo] = useState("");
   const [updating, setUpdating] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Reservation | null>(null);
+  const [editProfesionalId, setEditProfesionalId] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -283,6 +289,56 @@ export function ReservationsPage() {
     setStatusTarget(null);
     setStatusMotivo("");
     setSelected(null);
+    setEditing(null);
+  }
+
+  function openEdit(reservation: Reservation) {
+    setEditError(null);
+    setEditProfesionalId(
+      reservation.profesional_id ? String(reservation.profesional_id) : "",
+    );
+    setEditing(reservation);
+  }
+
+  async function saveReservation() {
+    if (!selectedShopId || !editing) return;
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      const updated = await updateReservation(
+        selectedShopId,
+        editing.id_reserva,
+        {
+          profesional_id: editProfesionalId
+            ? Number(editProfesionalId)
+            : null,
+        },
+      );
+
+      setReservations((current) =>
+        current.map((item) =>
+          item.id_reserva === updated.id_reserva ? updated : item,
+        ),
+      );
+      setSelected((current) =>
+        current && current.id_reserva === updated.id_reserva
+          ? updated
+          : current,
+      );
+      setEditing(null);
+      setNotice(
+        updated.profesional_nombre
+          ? `Reserva asignada a ${updated.profesional_nombre}.`
+          : "Reserva actualizada correctamente.",
+      );
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setEditError(
+        err instanceof Error ? err.message : "No pudimos actualizar la reserva.",
+      );
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
   async function confirmStatusChange() {
@@ -513,7 +569,7 @@ export function ReservationsPage() {
       <Card>
         <CardHeader
           title="Filtros"
-          subtitle="Encuentra una cita por fecha, estado, profesional o cliente."
+          subtitle="Encuentra una cita por fecha, estado, personal o cliente."
           icon={<LuFilter />}
           action={
             hasFilters ? (
@@ -590,13 +646,13 @@ export function ReservationsPage() {
                 ))}
               </Select>
             </Field>
-            <Field label="Profesional" htmlFor="reservations-professional">
+            <Field label="Personal" htmlFor="reservations-professional">
               <Select
                 id="reservations-professional"
                 value={profesionalId}
                 onChange={(event) => setProfesionalId(event.target.value)}
               >
-                <option value="">Todo el equipo</option>
+                <option value="">Todo el personal</option>
                 {professionals.map((professional) => (
                   <option
                     key={professional.id_profesional}
@@ -667,7 +723,7 @@ export function ReservationsPage() {
                     <th className="px-4 py-3">Fecha y hora</th>
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3">Servicio</th>
-                    <th className="px-4 py-3">Profesional</th>
+                    <th className="px-4 py-3">Personal</th>
                     <th className="px-4 py-3">Estado</th>
                     <th className="px-4 py-3 text-right">Acciones</th>
                   </tr>
@@ -725,6 +781,17 @@ export function ReservationsPage() {
                             >
                               Ver
                             </Button>
+                            {(reservation.estado === "pendiente" ||
+                              reservation.estado === "confirmada") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                leftIcon={<LuPencil size={14} />}
+                                onClick={() => openEdit(reservation)}
+                              >
+                                Editar
+                              </Button>
+                            )}
                             {reservation.estado === "pendiente" && (
                               <Button
                                 variant="secondary"
@@ -812,6 +879,17 @@ export function ReservationsPage() {
                       >
                         Ver detalle
                       </Button>
+                      {(reservation.estado === "pendiente" ||
+                        reservation.estado === "confirmada") && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<LuPencil size={14} />}
+                          onClick={() => openEdit(reservation)}
+                        >
+                          Editar
+                        </Button>
+                      )}
                       {reservation.estado === "pendiente" && (
                         <Button
                           variant="secondary"
@@ -856,6 +934,7 @@ export function ReservationsPage() {
       <ReservationDetailModal
         reservation={selected}
         onClose={() => setSelected(null)}
+        onEdit={(reservation) => openEdit(reservation)}
         onRequestStatus={(reservation, nextStatus) =>
           requestStatus(reservation, nextStatus)
         }
@@ -937,6 +1016,101 @@ export function ReservationsPage() {
           </div>
         )}
       </Modal>
+
+      <Modal
+        isOpen={Boolean(editing)}
+        onClose={() => {
+          if (savingEdit) return;
+          setEditing(null);
+        }}
+        title="Editar reserva"
+        description="Asigna quién atenderá la cita."
+        size="sm"
+      >
+        {editing && (
+          <div className="space-y-4">
+            <div className="space-y-1 rounded-xl border border-border/70 bg-surface/70 px-4 py-3 text-sm text-secondary-text">
+              <p className="font-semibold text-foreground">
+                {editing.servicio_nombre}
+              </p>
+              <p>
+                {editing.cliente_nombre} · {formatDateShort(editing.fecha)} ·{" "}
+                {formatClock(editing.hora_inicio)} –{" "}
+                {formatClock(editing.hora_fin)}
+              </p>
+            </div>
+
+            <Field
+              label="Personal"
+              htmlFor="reservation-edit-personal"
+              hint="Si el cliente no eligió a nadie, asigna aquí al miembro del personal que atenderá la cita."
+            >
+              <Select
+                id="reservation-edit-personal"
+                value={editProfesionalId}
+                onChange={(event) => setEditProfesionalId(event.target.value)}
+                disabled={savingEdit}
+              >
+                <option value="">Sin asignar</option>
+                {editing.profesional_id &&
+                  editing.profesional_nombre &&
+                  !professionals.some(
+                    (professional) =>
+                      professional.id_profesional === editing.profesional_id,
+                  ) && (
+                    <option value={editing.profesional_id}>
+                      {editing.profesional_nombre}
+                    </option>
+                  )}
+                {professionals.map((professional) => (
+                  <option
+                    key={professional.id_profesional}
+                    value={professional.id_profesional}
+                  >
+                    {professional.nombre}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            {professionals.length === 0 && (
+              <p className="text-xs leading-relaxed text-secondary-text">
+                Todavía no tienes personal registrado.{" "}
+                <Link
+                  to="/profesionales"
+                  className="font-semibold text-primary hover:underline"
+                >
+                  Agrega personal
+                </Link>{" "}
+                para poder asignarlo a las reservas.
+              </p>
+            )}
+
+            {editError && (
+              <div className="rounded-xl border border-error/20 bg-error-tint px-4 py-3 text-sm font-medium text-error">
+                {editError}
+              </div>
+            )}
+
+            <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setEditing(null)}
+                disabled={savingEdit}
+              >
+                Cancelar
+              </Button>
+              <Button
+                loading={savingEdit}
+                leftIcon={<LuCheck size={15} />}
+                onClick={saveReservation}
+              >
+                Guardar cambios
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -944,10 +1118,12 @@ export function ReservationsPage() {
 function ReservationDetailModal({
   reservation,
   onClose,
+  onEdit,
   onRequestStatus,
 }: {
   reservation: Reservation | null;
   onClose: () => void;
+  onEdit: (reservation: Reservation) => void;
   onRequestStatus: (
     reservation: Reservation,
     estado: ReservationStatus,
@@ -992,7 +1168,7 @@ function ReservationDetailModal({
               },
               {
                 icon: <LuUser size={16} />,
-                label: "Profesional",
+                label: "Personal",
                 value: reservation.profesional_nombre ?? "Sin asignar",
               },
               {
@@ -1057,6 +1233,14 @@ function ReservationDetailModal({
           {(reservation.estado === "pendiente" ||
             reservation.estado === "confirmada") && (
             <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                className="sm:mr-auto"
+                leftIcon={<LuPencil size={15} />}
+                onClick={() => onEdit(reservation)}
+              >
+                Editar reserva
+              </Button>
               <Button
                 variant="ghost"
                 className="text-error/80 hover:bg-error-tint hover:text-error"

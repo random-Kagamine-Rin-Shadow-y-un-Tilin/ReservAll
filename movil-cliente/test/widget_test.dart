@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:movil_cliente/main.dart';
 
 void main() {
@@ -9,7 +8,8 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
-    expect(find.text('SRLN'), findsOneWidget);
+    // Cambia 'ReservAll' por el título real que muestre tu pantalla de login
+    expect(find.text('ReservAll'), findsOneWidget);
     expect(find.text('Ingresar'), findsOneWidget);
   });
 }

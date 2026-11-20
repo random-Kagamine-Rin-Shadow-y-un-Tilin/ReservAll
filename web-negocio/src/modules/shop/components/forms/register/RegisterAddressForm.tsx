@@ -49,7 +49,7 @@ export function RegisterAddressForm({onSuccess}:  {onSuccess: ()=> void}){
         setLoading(true)
         
         try{
-            const data = await registerAddress(Number(shopId), address)
+            await registerAddress(Number(shopId), address)
             onSuccess()
         } catch (err){
             setError(err instanceof Error ? err.message : 'Error al registrar contacto.')

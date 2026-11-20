@@ -62,7 +62,7 @@ export function EditGeneralForm(
                 urlImage = await uploadShopImage(fileImage)
             }
     
-            const shop = await editShop(
+            await editShop(
                 {
                     nombre: editGeneral.nombre,
                     descripcion: editGeneral.descripcion,

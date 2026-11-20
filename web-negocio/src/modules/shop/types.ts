@@ -33,6 +33,7 @@ type IconName =
   | "sitio_web";
 
 export interface ShopContactInfo{
+    id_social?: number
     nombre_red: IconName
     url: string
 }

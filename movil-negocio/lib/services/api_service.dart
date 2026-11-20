@@ -15,17 +15,19 @@ class ApiService {
 
   void init() {
     _cookieJar = CookieJar();
-    _dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'x-api-key': AppConfig.apiKey,
-      },
-      connectTimeout: const Duration(seconds: 60),
-      receiveTimeout: const Duration(seconds: 60),
-      sendTimeout: const Duration(seconds: 60),
-    ));
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'x-api-key': AppConfig.apiKey,
+        },
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 60),
+        sendTimeout: const Duration(seconds: 60),
+      ),
+    );
 
     _dio.interceptors.add(CookieManager(_cookieJar));
   }
@@ -36,17 +38,14 @@ class ApiService {
     bool requiresAuth = true,
   }) async {
     try {
-      final response = await _dio.get(
-        endpoint,
-        queryParameters: queryParams,
-      );
+      final response = await _dio.get(endpoint, queryParameters: queryParams);
       return response;
     } on DioException catch (e) {
       throw _handleError(e);
     }
   }
 
-  // 👇 POST CORREGIDO PARA MANEJAR FormData
+  //  POST para MANEJAR FormData
   Future<Response> post(
     String endpoint, {
     dynamic body,
@@ -55,7 +54,7 @@ class ApiService {
     try {
       // Si body es FormData, no sobrescribir Content-Type
       final options = Options();
-      
+
       if (body is FormData) {
         // FormData ya tiene su propio Content-Type
         options.headers = {
@@ -63,12 +62,8 @@ class ApiService {
           'x-api-key': AppConfig.apiKey,
         };
       }
-      
-      final response = await _dio.post(
-        endpoint,
-        data: body,
-        options: options,
-      );
+
+      final response = await _dio.post(endpoint, data: body, options: options);
       return response;
     } on DioException catch (e) {
       throw _handleError(e);
@@ -81,10 +76,29 @@ class ApiService {
     bool requiresAuth = true,
   }) async {
     try {
-      final response = await _dio.put(
-        endpoint,
-        data: body,
-      );
+      final response = await _dio.put(endpoint, data: body);
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> patch(
+    String endpoint, {
+    dynamic body,
+    bool requiresAuth = true,
+  }) async {
+    try {
+      final response = await _dio.patch(endpoint, data: body);
+      return response;
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<Response> delete(String endpoint, {bool requiresAuth = true}) async {
+    try {
+      final response = await _dio.delete(endpoint);
       return response;
     } on DioException catch (e) {
       throw _handleError(e);

@@ -1,60 +1,109 @@
-@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-background: #fAf6f1;
-  --color-foreground: #2B2118;
-
+  /* Earth & Ethos — ReservAll palette */
+  --color-background: #faf6f0;
+  --color-surface: #fdf9f4;
   --color-card: #ffffff;
+  --color-surface-muted: #f3ece3;
 
-  --color-primary: #E2725B;
-  --color-primary-foreground: #FFFFFF;
+  --color-foreground: #241c16;
+  --color-secondary-text: #7a7267;
+  --color-muted: #8a8178;
 
-  --color-secondary: #2A9D8F;
-  --color-secondary-foreground: #FFFFFF;
+  --color-primary: #9f402d;
+  --color-primary-soft: #c65d45;
+  --color-primary-tint: #f7e6e0;
+  --color-primary-foreground: #ffffff;
 
-  --color-muted: #C65D45;
-  --color-muted-foreground: #FFFFFF;
+  --color-secondary: #0f6a60;
+  --color-secondary-soft: #2a9d8f;
+  --color-secondary-tint: #e2f1ed;
+  --color-secondary-foreground: #ffffff;
 
-  --color-border: #878787;
+  --color-highlight: #b98a20;
+  --color-highlight-soft: #e9c46a;
+  --color-highlight-tint: #fbf1d7;
 
-  --radius: 0.75rem;
+  --color-border: #e8dbcd;
+  --color-border-strong: #d8c4b4;
 
-  --color-highlight: #E9C46A;
-  --color-surface: #ffffff;
+  --color-error: #b3261e;
+  --color-error-tint: #fbe7e5;
+  --color-success: #3a7d5e;
+  --color-success-tint: #e3f2ea;
 
-  --color-secondary-text: #7A7267;
+  --radius: 1rem;
 
-  --color-error: #e63946;
-  --color-success: #52B788;
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
 
-  /* breakpoints */
-  
-  /* --breakpoint-sm: 400px;
-  --breakpoint-md: 630px; */
-  /* --breakpoint-lg: 900px;
-  --breakpoint-xl: 200px;
-  --breakpoint-2xl: 200px; */
-
-  /* FONT */
-
-  --font-serif: "Hanken Grotesk", sans-serif;
-
+  --shadow-soft: 0 1px 2px rgba(36, 28, 22, 0.04), 0 12px 32px -18px rgba(36, 28, 22, 0.22);
+  --shadow-lift: 0 2px 4px rgba(36, 28, 22, 0.05), 0 24px 48px -24px rgba(36, 28, 22, 0.3);
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
-    font-family: var(--font-serif);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: var(--color-background);
+    background-image:
+      radial-gradient(60rem 60rem at 110% -10%, rgba(233, 196, 106, 0.14), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 110%, rgba(42, 157, 143, 0.1), transparent 60%);
+    color: var(--color-foreground);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
   }
 
   button {
     cursor: pointer;
   }
 
-  body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+  button:disabled {
+    cursor: not-allowed;
   }
 
+  ::selection {
+    background-color: rgba(226, 114, 91, 0.25);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary-soft);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: #d9cabc;
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #c8b4a2;
+  }
 }

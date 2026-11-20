@@ -40,7 +40,7 @@ export function RegisterContacForm(
         setLoading(true)
 
         try{
-            const social = await registerContact(Number(shopId), {
+            await registerContact(Number(shopId), {
                 nombre_red: socialName,
                 url: url
             })

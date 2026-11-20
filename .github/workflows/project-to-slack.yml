@@ -1,0 +1,38 @@
+
+name: GitHub Project a Slack
+
+on:
+  repository_dispatch:
+    types: [project_status_changed]
+
+jobs:
+  notify-slack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enviar notificacion a Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_PROJECTS }}
+          TITLE: ${{ github.event.client_payload.title }}
+          URL: ${{ github.event.client_payload.url }}
+          OLD_STATUS: ${{ github.event.client_payload.old_status }}
+          NEW_STATUS: ${{ github.event.client_payload.new_status }}
+          ACTOR: ${{ github.event.client_payload.actor }}
+        run: |
+          jq -n \
+            --arg title "$TITLE" \
+            --arg url "$URL" \
+            --arg old "$OLD_STATUS" \
+            --arg new "$NEW_STATUS" \
+            --arg actor "$ACTOR" \
+            '{
+              text: ("📌 *" + $title + "*\n" +
+                    "Estado: `" + $old + "` → `" + $new + "`\n" +
+                    "👤 Responsable del cambio: " + $actor + "\n" +
+                    "🔗 " + $url)
+            }' > payload.json
+
+          curl -X POST \
+            -H "Content-type: application/json" \
+            --data @payload.json \
+            "$SLACK_WEBHOOK"

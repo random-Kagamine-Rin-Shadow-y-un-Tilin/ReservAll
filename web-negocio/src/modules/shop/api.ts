@@ -1,6 +1,6 @@
 import { fetchWithAuth } from "../../lib/api";
 import type { 
-    ShopGeneralInfo, RegisterShopPayload, EditShopPayloal, ShopContactInfo, 
+    ShopGeneralInfo, RegisterShopPayload, EditShopPayload, ShopContactInfo, 
     ShopContactRegister, ShopFullProfileOut, ShopScheduleRegister, ShopSheduleInfo, 
     ShopAddressInfo, ShopAddressRegister,
 } from "./types";
@@ -36,7 +36,7 @@ export async function registerShop(payload: RegisterShopPayload): Promise<ShopGe
     return res.json()
 }
 
-export async function editShop(payload: EditShopPayloal, shopId: number): 
+export async function editShop(payload: EditShopPayload, shopId: number): 
 Promise<ShopGeneralInfo>{
     const res = await fetchWithAuth(`${API_URL}/shop/edit-shop/${shopId}`,{
         method : 'PUT',
@@ -154,6 +154,23 @@ export async function registerSchedule(
     if (!res.ok){
         const error = await res.json()
         throw new Error(error.detail || 'Error al registrar horario.')
+    }
+
+    return res.json()
+}
+
+// DELETE SHOP (soft delete: desactiva el negocio)
+export async function deleteShop(shopId: number): Promise<{
+    message: string
+    shop: { id: number; nombre: string; estado_negocio: boolean }
+}> {
+    const res = await fetchWithAuth(`${API_URL}/shop/delete-shop/${shopId}`, {
+        method: 'DELETE',
+    })
+
+    if (!res.ok){
+        const error = await res.json()
+        throw new Error(error.detail || 'Error al eliminar el negocio.')
     }
 
     return res.json()

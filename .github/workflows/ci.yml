@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # Detecta qué carpetas del monorepo cambiaron para correr solo lo necesario.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      web: ${{ steps.filter.outputs.web }}
+      movil-cliente: ${{ steps.filter.outputs.movil-cliente }}
+      movil-negocio: ${{ steps.filter.outputs.movil-negocio }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'web-negocio/**'
+              - '.github/workflows/ci.yml'
+            movil-cliente:
+              - 'movil-cliente/**'
+              - '.github/workflows/ci.yml'
+            movil-negocio:
+              - 'movil-negocio/**'
+              - '.github/workflows/ci.yml'
+
+  backend:
+    name: Backend (FastAPI)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt ruff
+      - name: Lint (errores graves)
+        run: ruff check --select=E9,F63,F7,F82 app
+      - name: Compilar
+        run: python -m compileall -q app
+
+  web:
+    name: Web negocio (React + Vite)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-negocio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-negocio/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm build
+      - name: Guardar build
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-negocio-dist
+          path: web-negocio/dist
+          retention-days: 14
+
+  flutter:
+    name: Flutter (${{ matrix.app }})
+    needs: changes
+    if: needs.changes.outputs.movil-cliente == 'true' || needs.changes.outputs.movil-negocio == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [movil-cliente, movil-negocio]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Analizar
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Pruebas
+        run: |
+          if [ -d test ]; then flutter test; else echo "Sin carpeta test/, se omiten pruebas"; fi
+
+  # Avisa en Slack si algún job falla (requiere el secreto SLACK_WEBHOOK_URL).
+  notify-slack:
+    needs: [backend, web, flutter]
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+    steps:
+      - name: Enviar alerta a Slack
+        if: env.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: ":x: CI falló en *${{ github.repository }}* (${{ github.ref_name }}) por ${{ github.actor }}\nBackend: ${{ needs.backend.result }} · Web: ${{ needs.web.result }} · Flutter: ${{ needs.flutter.result }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver ejecución>"

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../business/business_list_screen.dart';
 import '../booking/booking_list_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -15,8 +14,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _screens = [
     const _HomeContent(),
-    const BookingListScreen(), 
-    const ProfileScreen(),  
+    const BookingListScreen(),
+    const ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -33,6 +32,14 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('SRLN'),
         backgroundColor: const Color(0xFFE2725B),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.favorite, color: Colors.white),
+            onPressed: () {
+              Navigator.pushNamed(context, '/favorites');
+            },
+          ),
+        ],
       ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
@@ -40,9 +47,13 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: _onItemTapped,
         selectedItemColor: const Color(0xFFE2725B),
         unselectedItemColor: const Color(0xFF7A7267),
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Reservas'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_today),
+            label: 'Reservas',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
         ],
       ),
@@ -62,12 +73,17 @@ class _HomeContent extends StatelessWidget {
           children: [
             const Text(
               'Agenda tu próxima cita en segundos',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2B2118)),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2B2118),
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
             const Text(
-              'Restaurantes, peluquerías, spas y más — todo en un solo lugar, sin llamadas ni esperas.',
+              'Restaurantes, barberías, spas y más: todo en un solo lugar, '
+              'sin llamadas ni esperas.',
               style: TextStyle(fontSize: 14, color: Color(0xFF7A7267)),
               textAlign: TextAlign.center,
             ),
@@ -75,31 +91,59 @@ class _HomeContent extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _categoryCard(context, Icons.restaurant, 'Restaurantes', const Color(0xFFE9C46A)),
+                _categoryCard(
+                  context,
+                  Icons.restaurant,
+                  'Restaurante',
+                  const Color(0xFFE9C46A),
+                ),
                 const SizedBox(width: 12),
-                _categoryCard(context, Icons.cut, 'Peluquerías', const Color(0xFF2A9D8F)),
+                _categoryCard(
+                  context,
+                  Icons.cut,
+                  'Barberia',
+                  const Color(0xFF2A9D8F),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _categoryCard(context, Icons.spa, 'Spa', const Color(0xFFE2725B)),
+                _categoryCard(
+                  context,
+                  Icons.spa,
+                  'Spa',
+                  const Color(0xFFE2725B),
+                ),
                 const SizedBox(width: 12),
-                _categoryCard(context, Icons.brush, 'Uñas', const Color(0xFFE63946)),
+                _categoryCard(
+                  context,
+                  Icons.brush,
+                  'Belleza',
+                  const Color(0xFFE63946),
+                ),
               ],
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE2725B),
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               onPressed: () {
                 Navigator.pushNamed(context, '/business');
               },
-              child: const Text('Reservar ahora', style: TextStyle(color: Colors.white)),
+              child: const Text(
+                'Buscar negocios',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -107,7 +151,12 @@ class _HomeContent extends StatelessWidget {
     );
   }
 
-  static Widget _categoryCard(BuildContext context, IconData icon, String title, Color color) {
+  static Widget _categoryCard(
+    BuildContext context,
+    IconData icon,
+    String title,
+    Color color,
+  ) {
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(context, '/business', arguments: title);
@@ -125,7 +174,13 @@ class _HomeContent extends StatelessWidget {
           children: [
             Icon(icon, size: 32, color: color),
             const SizedBox(height: 6),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2B2118))),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2B2118),
+              ),
+            ),
           ],
         ),
       ),

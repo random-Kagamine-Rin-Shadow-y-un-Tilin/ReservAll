@@ -1,0 +1,23 @@
+name: Tarea / Historia de usuario
+description: Nueva funcionalidad o tarea para el tablero
+labels: [enhancement]
+body:
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripción
+      description: Como [rol] quiero [acción] para [beneficio]
+    validations:
+      required: true
+  - type: dropdown
+    id: modulo
+    attributes:
+      label: Módulo
+      options: [backend, web-negocio, movil-cliente, movil-negocio, general]
+    validations:
+      required: true
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptación
+      placeholder: "- [ ] ..."

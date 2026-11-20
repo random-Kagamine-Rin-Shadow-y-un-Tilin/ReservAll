@@ -3,6 +3,19 @@ import type { User, RegisterPayload, LoginPayLoad } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL
 
+async function readError(res: Response, fallback: string): Promise<string> {
+    try {
+        const data = await res.json()
+        if (data && typeof data === 'object' && 'detail' in data) {
+            const detail = (data as { detail: unknown }).detail
+            if (typeof detail === 'string') return detail
+        }
+        return fallback
+    } catch {
+        return fallback
+    }
+}
+
 export async function registerUser(payload: RegisterPayload):Promise<User> {
     const res = await fetchWithAuth(`${API_URL}/auth/register`, {
         method: 'POST',
@@ -11,8 +24,7 @@ export async function registerUser(payload: RegisterPayload):Promise<User> {
     })
 
     if (!res.ok){
-        const error = await res.json()
-        throw new Error(error.detail || "Error al registar usuario.")
+        throw new Error(await readError(res, "Error al registar usuario."))
     }
 
     return res.json() 
@@ -26,8 +38,7 @@ export async function loginUser(payload:LoginPayLoad): Promise<User> {
     })
 
     if (!res.ok){
-        const error = await res.json()
-        throw new Error(error.detail || 'Correo o contraseña incorrectos.')
+        throw new Error(await readError(res, 'Correo o contraseña incorrectos.'))
     }
 
     return res.json()
@@ -38,8 +49,12 @@ export async function logOut(): Promise<void> {
 }
 
 export async function getCurrentUser():Promise<User | null> {
-    const res = await fetchWithAuth(`${API_URL}/profile/me`)
-    if (!res.ok) return null
-    const data = await res.json()
-    return data
+    try {
+        const res = await fetchWithAuth(`${API_URL}/profile/me`)
+        if (!res.ok) return null
+        return await res.json() as User
+    } catch {
+        // Sin backend disponible o respuesta no JSON: se trata como sesión cerrada.
+        return null
+    }
 }

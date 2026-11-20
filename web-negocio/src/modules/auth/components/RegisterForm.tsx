@@ -1,168 +1,211 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
-import { useNavigate, Link} from 'react-router-dom';
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import {
+  LuArrowRight,
+  LuCheck,
+  LuCircleAlert,
+  LuEye,
+  LuEyeOff,
+  LuLock,
+  LuMail,
+  LuStore,
+  LuUser,
+} from "react-icons/lu";
 import { useAuth } from "../hooks/useAuth";
-import { validatePassword, validateEmail } from "../../../shared/utils/validators";
+import { validateEmail, validatePassword } from "../../../shared/utils/validators";
+import { Button } from "../../../shared/components/ui/Button";
+import { Field, Input } from "../../../shared/components/ui/Field";
 
-import { FaRegUser } from "react-icons/fa";
-import { MdOutlineEmail } from "react-icons/md";
-import { PiSquaresFourThin,  PiShieldCheckBold } from "react-icons/pi";
-import { RiLockPasswordLine } from "react-icons/ri";
+export function RegisterForm() {
+  const { register } = useAuth();
 
-export function RegisterForm(){
-    const {register} = useAuth()
-    const navigate = useNavigate()
+  const [name, setName] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-    const [name, setName] = useState('')
-    const [correo, setCorreo] = useState('')
-    const [rol, setRol] = useState('cliente')
-    const [password, setPassword] = useState('')
-    const [confirmPassword, setConfirmPassword] = useState('')
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
 
-    const [error, setError] = useState<String | null>(null)
-    const [loading, setLoading] = useState(false)
-    const [success, setSuccess] = useState(false)
-
-    async function handleSubmit(e:FormEvent) {
-        e.preventDefault()
-        setError(null)
-
-        if(!name.trim() || !correo.trim || !password.trim || !confirmPassword.trim()){
-            setError('Todos los campos son obligatorios.')
-            return
-        }
-        if(!validateEmail(correo)){
-            setError('El correo no es valido')
-            return
-        }
-        if(password !== confirmPassword){
-            setError('Las contraseñas no coinciden.')
-            return
-        }
-        const errorPassword = validatePassword(password)
-        if (errorPassword){
-            setError(errorPassword)
-            return
-        }
-
-        setLoading(true)
-        try{
-            await register({nombre: name.trim(), correo, password, confirm_password: confirmPassword, rol})
-            setSuccess(true)
-            setTimeout(()=> navigate('/login'), 1500);
-        } catch (err){
-            setError(err instanceof Error ? err.message : 'Error al registrar.')
-        } finally {
-            setLoading(false)
-        }
+    if (!name.trim() || !correo.trim() || !password || !confirmPassword) {
+      setError("Todos los campos son obligatorios.");
+      return;
+    }
+    if (!validateEmail(correo.trim())) {
+      setError("Ingresa un correo electrónico válido.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
     }
 
-    if (success){
-        return (
-            <p>Cuenta creada</p>
-        )
+    setLoading(true);
+    try {
+      await register({
+        nombre: name.trim(),
+        correo: correo.trim(),
+        password,
+        confirm_password: confirmPassword,
+        rol: "negocio",
+      });
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No pudimos crear tu cuenta.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    return(
-        <main className="flex justify-center items-center h-screen">
-            <form onSubmit={handleSubmit} 
-            className="bg-card p-6 flex flex-col justify-center gap-2 rounded-2xl shadow"
-            >
-                <h2 className="font-medium text-center">Crear una cuenta</h2>
+  if (success) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-soft">
+        <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-success-tint text-2xl text-success">
+          <LuCheck />
+        </span>
+        <h2 className="mt-4 font-display text-xl font-bold text-foreground">
+          Tu cuenta está lista
+        </h2>
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-secondary-text">
+          Ya puedes iniciar sesión y registrar la información de tu negocio.
+        </p>
+        <Link to="/login" className="mt-6 inline-block">
+          <Button rightIcon={<LuArrowRight size={16} />}>Ir a iniciar sesión</Button>
+        </Link>
+      </div>
+    );
+  }
 
-                <div className="flex flex-col gap-2">
-                    <label className="font-medium text-xs">Nombre completo</label>
-                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
-                    border-gray-300 focus:border-highlight">
-                        <FaRegUser />
-                        <input 
-                        type="text" 
-                        value={name}
-                        onChange={(e) => setName(e.target.value)} 
-                        className="w-full focus:outline-none"
-                        placeholder="Ej. Juan Perez"
-                        />
-                    </div>
-                </div>
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-soft sm:p-7">
+      <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-primary/15 bg-primary-tint/50 px-3.5 py-3">
+        <LuStore size={16} className="mt-0.5 shrink-0 text-primary" />
+        <p className="text-xs leading-relaxed text-secondary-text">
+          Estás creando una <strong className="text-foreground">cuenta de negocio</strong>.
+          Podrás administrar tu local desde el panel de ReservAll.
+        </p>
+      </div>
 
-                <div className="flex flex-col gap-2">
-                    <label className="font-medium text-xs">Correo electrónico</label>
-                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
-                    border-gray-300">
-                        <MdOutlineEmail />
-                        <input 
-                        type="email"
-                        value={correo}
-                        onChange={(e)=> setCorreo(e.target.value)}
-                        className="focus:outline-none w-full"
-                        placeholder="tu@gmail.com"
-                        />
-                    </div>
-                </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Nombre completo" htmlFor="register-name" required>
+          <div className="relative">
+            <LuUser
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary-text"
+            />
+            <Input
+              id="register-name"
+              autoComplete="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="pl-10"
+              placeholder="Ej. Juan Pérez"
+            />
+          </div>
+        </Field>
 
-                <div className="flex flex-col gap-2">
-                    <label className="font-medium text-xs">Tipo de usuario</label>
-                    <div className="flex items-center gap-2 px-3 py-2 border rounded-md 
-                    border-gray-300">
-                        <PiSquaresFourThin />
-                        <select value={rol} onChange={(e)=>{setRol(e.target.value)}}
-                            className="w-full focus:outline-none"
-                            >
-                            <option value="cliente">Cliente</option>
-                            <option value="negocio">Negocio</option>
-                        </select>
-                    </div>
-                </div>
+        <Field label="Correo electrónico" htmlFor="register-email" required>
+          <div className="relative">
+            <LuMail
+              size={16}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary-text"
+            />
+            <Input
+              id="register-email"
+              type="email"
+              autoComplete="email"
+              value={correo}
+              onChange={(event) => setCorreo(event.target.value)}
+              className="pl-10"
+              placeholder="tu@negocio.com"
+            />
+          </div>
+        </Field>
 
-                <div className="flex justify-around gap-2">
-                    <div className="flex flex-col gap-2">
-                        <label className="font-medium text-xs">Contraseña</label>
-                        <div className="flex items-center gap-2 px-3 py-2 border 
-                        rounded-md border-gray-300">
-                            <RiLockPasswordLine />
-                            <input 
-                            type="password" 
-                            value={password}
-                            onChange={(e)=>setPassword(e.target.value)}
-                            className="focus:outline-none w-full"
-                            placeholder="● ● ● ● ● ●"
-                            />
-                        </div>
-                    </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Contraseña" htmlFor="register-password" required>
+            <div className="relative">
+              <LuLock
+                size={16}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary-text"
+              />
+              <Input
+                id="register-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="pl-10 pr-9"
+                placeholder="Mín. 8 caracteres"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-text transition-colors hover:text-foreground"
+              >
+                {showPassword ? <LuEyeOff size={15} /> : <LuEye size={15} />}
+              </button>
+            </div>
+          </Field>
 
-                    <div className="flex flex-col gap-2">
-                        <label className="font-medium text-xs">Confirmar contraseña</label>
-                        <div className="flex items-center gap-2 px-3 py-2 border 
-                        rounded-md border-gray-300">
-                            <PiShieldCheckBold/>
-                            <input 
-                            type="password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            className="focus:outline-none w-full"
-                            placeholder="● ● ● ● ● ●"
-                            />
-                        </div>
-                    </div>
-                </div>
+          <Field label="Confirmar contraseña" htmlFor="register-confirm" required>
+            <div className="relative">
+              <LuLock
+                size={16}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary-text"
+              />
+              <Input
+                id="register-confirm"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="pl-10"
+                placeholder="Repite la contraseña"
+              />
+            </div>
+          </Field>
+        </div>
 
-                {error && 
-                    <label className="text-error font-medium text-xs"
-                    >{error}
-                    </label>
-                }
+        <p className="text-[11px] leading-relaxed text-secondary-text">
+          La contraseña debe tener al menos 8 caracteres e incluir una mayúscula, una
+          minúscula y un número.
+        </p>
 
-                <button type="submit" disabled={loading}
-                className="p-2 bg-primary rounded-md text-card hover:bg-[#BF5842]"
-                >
-                    {loading ? 'Creando cuenta': 'Resgitrarse'}
-                </button>
+        {error && (
+          <div className="flex items-start gap-2 rounded-xl border border-error/20 bg-error-tint px-3.5 py-3 text-xs font-medium text-error">
+            <LuCircleAlert size={15} className="mt-0.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
-                <div className="flex text-xs justify-center gap-1 font-medium">
-                    <label className="text-gray-500">¿Ya tienes una cuenta?</label>
-                    <Link to={'/login'} className="text-secondary">Inicia sesión aquí</Link>
-                </div>
-            </form>
-        </main>
-    )
+        <Button
+          type="submit"
+          loading={loading}
+          className="w-full"
+          rightIcon={<LuArrowRight size={16} />}
+        >
+          Crear cuenta de negocio
+        </Button>
+      </form>
+
+      <p className="mt-6 border-t border-border/70 pt-5 text-center text-xs text-secondary-text">
+        ¿Ya tienes una cuenta?{" "}
+        <Link to="/login" className="font-semibold text-primary hover:underline">
+          Inicia sesión
+        </Link>
+      </p>
+    </div>
+  );
 }

@@ -734,22 +734,9 @@ class ShopsTab extends StatelessWidget {
     );
   }
 
-  String _getCategoryName(int categoryId) {
-    const categories = {
-      1: 'Gastronomía',
-      2: 'Tecnología',
-      3: 'Moda',
-      4: 'Salud y Bienestar',
-      5: 'Educación',
-      6: 'Jardinería',
-      7: 'Arte y Diseño',
-      8: 'Automotriz',
-      9: 'Belleza',
-      10: 'Eventos',
-      11: 'Fotografía',
-      12: 'Construcción',
-    };
-    return categories[categoryId] ?? 'Sin categoría';
+  String _getCategoryName(String? categoria) {
+    if (categoria == null || categoria.isEmpty) return 'Sin categoría';
+    return categoria;
   }
 }
 

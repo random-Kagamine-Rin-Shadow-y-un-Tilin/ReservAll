@@ -9,7 +9,7 @@ const titles: Record<string, string> = {
   "/negocio": "Mi negocio",
   "/negocio/registrar": "Registrar negocio",
   "/servicios": "Servicios",
-  "/profesionales": "Profesionales",
+  "/profesionales": "Personal",
   "/horarios": "Horarios",
   "/agenda": "Agenda",
   "/reservas": "Reservas",

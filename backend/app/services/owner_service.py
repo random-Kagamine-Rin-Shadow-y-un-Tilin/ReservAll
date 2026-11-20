@@ -194,6 +194,75 @@ async def update_reservation_status(
     return OwnerReservationOut(**dict(refreshed))
 
 
+async def update_reservation(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    reservation_id: int,
+    current_user_id: int,
+    profesional_id: Optional[int] = None,
+):
+    """Asigna o quita el personal de una reserva activa.
+
+    Permite al dueño del negocio asignar a un miembro del personal cuando el
+    cliente no eligió a nadie al reservar.
+    """
+
+    await _ensure_shop(pool, shop_id, current_user_id)
+
+    row = await repo.get_reservation(pool, shop_id, reservation_id)
+    if not row:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Reserva no encontrada."
+        )
+
+    estado_actual = _status_value(row["estado"])
+    if estado_actual not in ("pendiente", "confirmada"):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            TRANSITION_ERRORS.get(
+                estado_actual, "Esta reserva ya no se puede modificar."
+            ),
+        )
+
+    if profesional_id is not None:
+        profesional = await repo.get_professional(
+            pool, shop_id, profesional_id
+        )
+        if not profesional or not profesional["activo"]:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "El miembro del personal seleccionado no está activo "
+                "o no pertenece a este negocio.",
+            )
+
+        conflicts = await repo.get_reservation_conflicts(
+            pool,
+            shop_id,
+            reservation_id,
+            row["fecha"],
+            row["hora_inicio"],
+            row["hora_fin"],
+            profesional_id,
+        )
+        if conflicts:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "El miembro del personal ya tiene otra reserva en ese horario.",
+            )
+
+    updated = await repo.update_reservation_personal(
+        pool, shop_id, reservation_id, profesional_id
+    )
+    if not updated:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "La reserva cambió de estado. Vuelve a intentarlo.",
+        )
+
+    refreshed = await repo.get_reservation(pool, shop_id, reservation_id)
+    return OwnerReservationOut(**dict(refreshed))
+
+
 # HU_44: confirmar una reserva pendiente
 async def confirm_reservation(
     pool: asyncpg.Pool,

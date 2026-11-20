@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     supabase_url : str
     supabase_service_role_key: str
     supabase_bucket: str = 'negocios_fotos'
+    #Geocodificacion (OpenStreetMap / Nominatim)
+    geocoding_url: str = "https://nominatim.openstreetmap.org"
+    geocoding_user_agent: str = "ReservAll/1.0 (+https://github.com/random-Kagamine-Rin-Shadow-y-un-Tilin/ReservAll)"
+    geocoding_timeout_seconds: float = 10.0
     
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env")
         

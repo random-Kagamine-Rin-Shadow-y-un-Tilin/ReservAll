@@ -141,6 +141,78 @@ async def update_reservation_status(
         )
 
 
+async def get_professional(pool: asyncpg.Pool, shop_id: int, professional_id: int):
+    query = """
+        SELECT id_profesional, negocio_id, nombre, especialidad, activo
+        FROM profesionales
+        WHERE id_profesional = $1 AND negocio_id = $2
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(query, professional_id, shop_id)
+
+
+async def get_reservation_conflicts(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    reservation_id: int,
+    fecha: date,
+    hora_inicio,
+    hora_fin,
+    profesional_id: int,
+):
+    """Reservas activas que chocarían con el personal seleccionado."""
+
+    query = """
+        SELECT r.id_reserva
+        FROM reservas AS r
+        INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
+        WHERE s.negocio_id = $1
+          AND r.id_reserva <> $2
+          AND r.fecha = $3
+          AND r.estado IN ('pendiente', 'confirmada')
+          AND r.hora_inicio < $5
+          AND COALESCE(
+                r.hora_fin,
+                r.hora_inicio + make_interval(mins => s.duracion_minutos)
+              ) > $4
+          AND (r.profesional_id = $6 OR r.profesional_id IS NULL)
+        ORDER BY r.hora_inicio
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            query,
+            shop_id,
+            reservation_id,
+            fecha,
+            hora_inicio,
+            hora_fin,
+            profesional_id,
+        )
+
+
+async def update_reservation_personal(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    reservation_id: int,
+    profesional_id: Optional[int],
+):
+    query = """
+        UPDATE reservas AS r
+        SET profesional_id = $3,
+            fecha_actualizacion = NOW()
+        FROM servicios AS s
+        WHERE r.servicio_id = s.id_servicio
+          AND s.negocio_id = $1
+          AND r.id_reserva = $2
+          AND r.estado IN ('pendiente', 'confirmada')
+        RETURNING r.id_reserva
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            query, shop_id, reservation_id, profesional_id
+        )
+
+
 # Clientes -------------------------------------------------------------------
 
 _CLIENT_AGGREGATE = """

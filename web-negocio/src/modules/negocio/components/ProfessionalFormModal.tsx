@@ -39,7 +39,7 @@ export function ProfessionalFormModal({
     setError(null);
 
     if (!nombre.trim()) {
-      setError("El nombre del profesional es obligatorio.");
+      setError("El nombre del miembro del personal es obligatorio.");
       return;
     }
 
@@ -62,7 +62,7 @@ export function ProfessionalFormModal({
       setError(
         err instanceof Error
           ? err.message
-          : "No pudimos guardar al profesional.",
+          : "No pudimos guardar al miembro del personal.",
       );
     } finally {
       setLoading(false);
@@ -73,11 +73,11 @@ export function ProfessionalFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditing ? "Editar profesional" : "Nuevo profesional"}
+      title={isEditing ? "Editar personal" : "Agregar personal"}
       description={
         isEditing
-          ? "Actualiza los datos del integrante de tu equipo."
-          : "Agrega a alguien de tu equipo para asignarle servicios."
+          ? "Actualiza los datos del integrante de tu personal."
+          : "Agrega a alguien de tu personal para asignarle servicios y reservas."
       }
       size="sm"
     >
@@ -119,7 +119,7 @@ export function ProfessionalFormModal({
             loading={loading}
             leftIcon={<LuUserPlus size={15} />}
           >
-            {isEditing ? "Guardar cambios" : "Agregar profesional"}
+            {isEditing ? "Guardar cambios" : "Agregar personal"}
           </Button>
         </div>
       </div>

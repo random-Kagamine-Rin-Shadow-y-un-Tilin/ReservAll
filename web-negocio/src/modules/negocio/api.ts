@@ -120,14 +120,14 @@ export function deleteService(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Profesionales                                                              */
+/* Personal                                                                   */
 /* -------------------------------------------------------------------------- */
 
 export function getProfessionals(shopId: number): Promise<Professional[]> {
   return request(
     `/professional/list/${shopId}`,
     {},
-    "No pudimos cargar el equipo.",
+    "No pudimos cargar el personal.",
   );
 }
 
@@ -139,7 +139,7 @@ export function createProfessional(
     `/professional/register/${shopId}`,
     "POST",
     payload,
-    "No pudimos registrar al profesional.",
+    "No pudimos registrar al miembro del personal.",
   );
 }
 
@@ -152,7 +152,7 @@ export function editProfessional(
     `/professional/edit/${shopId}/${professionalId}`,
     "PUT",
     payload,
-    "No pudimos actualizar al profesional.",
+    "No pudimos actualizar al miembro del personal.",
   );
 }
 
@@ -163,7 +163,7 @@ export function deleteProfessional(
   return request(
     `/professional/delete/${shopId}/${professionalId}`,
     { method: "DELETE" },
-    "No pudimos desactivar al profesional.",
+    "No pudimos desactivar al miembro del personal.",
   );
 }
 

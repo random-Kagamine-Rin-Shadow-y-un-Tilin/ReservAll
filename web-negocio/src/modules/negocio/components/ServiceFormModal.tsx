@@ -231,13 +231,13 @@ export function ServiceFormModal({
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold text-foreground">Profesionales</p>
+            <p className="text-sm font-semibold text-foreground">Personal</p>
             <span className="text-xs text-secondary-text">Opcional</span>
           </div>
 
           {professionals.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border-strong bg-surface/60 px-4 py-3 text-xs text-secondary-text">
-              Aún no tienes profesionales registrados. Podrás asignarlos más adelante.
+              Aún no tienes personal registrado. Podrás asignarlo más adelante.
             </div>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">

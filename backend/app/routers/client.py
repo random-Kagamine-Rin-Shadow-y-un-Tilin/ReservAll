@@ -14,6 +14,7 @@ from app.models.client import (
     ReservationResponse,
     CreateReservationRequest,
     ServiceView,
+    ShopMapMarker,
 )
 from app.services import client_service
 from typing import Optional
@@ -99,6 +100,57 @@ async def search_catalog(
         limit=limit,
         offset=offset,
     )
+
+# Marcadores de negocios para el mapa (HU de ubicaciones)
+@router.get('/map/shops', response_model=list[ShopMapMarker])
+async def list_map_shops(
+    q: Optional[str] = Query(
+        None, min_length=2, max_length=100,
+        description="Texto libre: nombre, descripción, categoría o servicio",
+    ),
+    categoria_id: Optional[int] = Query(None, ge=1),
+    ciudad: Optional[str] = Query(None, min_length=2, max_length=100),
+    lat: Optional[float] = Query(
+        None, ge=-90, le=90, description="Latitud del centro del mapa",
+    ),
+    lng: Optional[float] = Query(
+        None, ge=-180, le=180, description="Longitud del centro del mapa",
+    ),
+    radio_km: Optional[float] = Query(
+        None, gt=0, le=500, description="Radio en kilómetros desde lat/lng",
+    ),
+    min_lat: Optional[float] = Query(
+        None, ge=-90, le=90, description="Límite sur de la zona visible",
+    ),
+    max_lat: Optional[float] = Query(
+        None, ge=-90, le=90, description="Límite norte de la zona visible",
+    ),
+    min_lng: Optional[float] = Query(
+        None, ge=-180, le=180, description="Límite oeste de la zona visible",
+    ),
+    max_lng: Optional[float] = Query(
+        None, ge=-180, le=180, description="Límite este de la zona visible",
+    ),
+    limit: int = Query(200, ge=1, le=500, description="Marcadores por página"),
+    offset: int = Query(0, ge=0),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.list_map_shops(
+        pool,
+        q=q,
+        categoria_id=categoria_id,
+        ciudad=ciudad,
+        lat=lat,
+        lng=lng,
+        radio_km=radio_km,
+        min_lat=min_lat,
+        max_lat=max_lat,
+        min_lng=min_lng,
+        max_lng=max_lng,
+        limit=limit,
+        offset=offset,
+    )
+
 
 # Detalle público de un negocio (HU_40)
 @router.get('/shops/{negocio_id}', response_model=ShopDetailView)

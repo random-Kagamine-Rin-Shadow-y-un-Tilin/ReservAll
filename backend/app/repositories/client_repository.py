@@ -216,6 +216,160 @@ async def search_shops_catalog(
         return await conn.fetch(query, *params)
 
 
+# Marcadores para el mapa -----------------------------------------------------
+#
+# Consulta ligera: no calcula valoraciones ni popularidad porque el mapa solo
+# necesita los datos del marcador. Se puede filtrar por la zona visible
+# (bounding box), por radio o por categoría/texto.
+
+_MAP_SELECT = """
+    SELECT
+        n.id,
+        n.nombre,
+        n.descripcion,
+        n.imagen_negocio,
+        n.fk_categoria AS id_categoria,
+        c.nombre_categoria AS categoria_negocio,
+        NULLIF(
+            TRIM(
+                CONCAT_WS(
+                    ', ',
+                    NULLIF(
+                        TRIM(
+                            CONCAT_WS(
+                                ' ',
+                                d.direccion_calle,
+                                d.numero_local,
+                                d.numero_interior
+                            )
+                        ),
+                        ''
+                    ),
+                    NULLIF(d.ciudad, ''),
+                    NULLIF(d.estado, '')
+                )
+            ),
+            ''
+        ) AS direccion,
+        d.ciudad,
+        d.estado AS estado_direccion,
+        d.latitud,
+        d.longitud,
+        ss.precio_minimo,
+        ss.precio_maximo
+        {distance_select}
+    FROM negocios AS n
+    INNER JOIN categorias AS c ON c.id_categoria = n.fk_categoria
+    INNER JOIN direcciones_negocio AS d ON d.negocio_id = n.id
+    LEFT JOIN (
+        SELECT
+            negocio_id,
+            MIN(precio) AS precio_minimo,
+            MAX(precio) AS precio_maximo
+        FROM servicios
+        WHERE estado_servicio = TRUE
+        GROUP BY negocio_id
+    ) AS ss ON ss.negocio_id = n.id
+    WHERE n.estado_negocio = TRUE
+      AND d.latitud IS NOT NULL
+      AND d.longitud IS NOT NULL
+"""
+
+
+async def list_map_shops(
+    pool: asyncpg.Pool,
+    *,
+    q: Optional[str] = None,
+    categoria_id: Optional[int] = None,
+    ciudad: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radio_km: Optional[float] = None,
+    min_lat: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    min_lng: Optional[float] = None,
+    max_lng: Optional[float] = None,
+    limit: int = 200,
+    offset: int = 0,
+):
+    params: list[object] = []
+    distance_select = ""
+
+    if lat is not None and lng is not None:
+        params.extend([float(lat), float(lng)])
+        distance_select = _DISTANCE_SELECT.format(lat="$1", lng="$2")
+    else:
+        # Mantiene el contrato del CTE aunque no se calcule la distancia.
+        distance_select = ", NULL::double precision AS distancia_km"
+
+    inner = _MAP_SELECT.format(distance_select=distance_select)
+    filters: list[str] = []
+
+    if q:
+        params.append(f"%{q}%")
+        idx = len(params)
+        filters.append(
+            "("
+            f"nombre ILIKE ${idx} "
+            f"OR COALESCE(descripcion, '') ILIKE ${idx} "
+            f"OR COALESCE(categoria_negocio, '') ILIKE ${idx} "
+            "OR EXISTS ("
+            "    SELECT 1 FROM servicios AS s2 "
+            "    WHERE s2.negocio_id = shop_data.id "
+            "      AND s2.estado_servicio = TRUE "
+            f"      AND s2.nombre ILIKE ${idx}"
+            ")"
+            ")"
+        )
+
+    if categoria_id is not None:
+        params.append(int(categoria_id))
+        filters.append(f"id_categoria = ${len(params)}")
+
+    if ciudad:
+        params.append(f"%{ciudad}%")
+        filters.append(f"COALESCE(ciudad, '') ILIKE ${len(params)}")
+
+    if min_lat is not None:
+        params.append(float(min_lat))
+        filters.append(f"latitud >= ${len(params)}")
+
+    if max_lat is not None:
+        params.append(float(max_lat))
+        filters.append(f"latitud <= ${len(params)}")
+
+    if min_lng is not None:
+        params.append(float(min_lng))
+        filters.append(f"longitud >= ${len(params)}")
+
+    if max_lng is not None:
+        params.append(float(max_lng))
+        filters.append(f"longitud <= ${len(params)}")
+
+    if radio_km is not None:
+        params.append(float(radio_km))
+        filters.append(f"distancia_km <= ${len(params)}")
+
+    where_clause = ""
+    if filters:
+        where_clause = " WHERE " + " AND ".join(filters)
+
+    params.append(int(limit))
+    limit_idx = len(params)
+    params.append(int(offset))
+    offset_idx = len(params)
+
+    query = (
+        f"WITH shop_data AS ({inner})"
+        f" SELECT * FROM shop_data{where_clause}"
+        " ORDER BY distancia_km ASC NULLS LAST, nombre ASC"
+        f" LIMIT ${limit_idx} OFFSET ${offset_idx}"
+    )
+
+    async with pool.acquire() as conn:
+        return await conn.fetch(query, *params)
+
+
 # Consulta de todos los negocios
 async def get_all_shops(pool: asyncpg.Pool):
     return await search_shops_catalog(pool)

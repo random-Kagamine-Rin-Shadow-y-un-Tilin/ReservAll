@@ -46,6 +46,24 @@ class ShopView(BaseModel):
     disponible: Optional[bool] = None
 
 
+class ShopMapMarker(BaseModel):
+    """Datos mínimos de un negocio para pintarlo como marcador en el mapa."""
+
+    id: int
+    nombre: str
+    imagen_negocio: Optional[str] = None
+    categoria_negocio: Optional[str] = None
+    id_categoria: Optional[int] = None
+    direccion: Optional[str] = None
+    ciudad: Optional[str] = None
+    estado_direccion: Optional[str] = None
+    latitud: float
+    longitud: float
+    precio_minimo: Optional[float] = None
+    precio_maximo: Optional[float] = None
+    distancia_km: Optional[float] = None
+
+
 class CategoryView(BaseModel):
     id_categoria: int
     nombre_categoria: str

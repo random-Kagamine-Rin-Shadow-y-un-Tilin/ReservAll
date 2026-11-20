@@ -175,3 +175,17 @@ class ReservaDetalle {
         profesionalEspecialidad: j['profesional_especialidad']?.toString(),
       );
 }
+
+class ProfesionalItem {
+  final int id;
+  final String nombre;
+  final String? especialidad;
+
+  ProfesionalItem({required this.id, required this.nombre, this.especialidad});
+
+  factory ProfesionalItem.fromJson(Map<String, dynamic> j) => ProfesionalItem(
+        id: int.tryParse('${j['id_profesional']}') ?? 0,
+        nombre: j['nombre']?.toString() ?? '',
+        especialidad: j['especialidad']?.toString(),
+      );
+}

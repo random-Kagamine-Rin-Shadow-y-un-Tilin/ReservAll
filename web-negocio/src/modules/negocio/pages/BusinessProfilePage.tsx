@@ -5,7 +5,6 @@ import {
   LuEye,
   LuEyeOff,
   LuGlobe,
-  LuInfo,
   LuMapPin,
   LuPencil,
   LuPlus,
@@ -363,7 +362,16 @@ export function BusinessProfilePage() {
                   >
                     Registrar
                   </Button>
-                ) : undefined
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<LuPencil size={14} />}
+                    onClick={() => setAddressModalOpen(true)}
+                  >
+                    Editar
+                  </Button>
+                )
               }
             />
 
@@ -395,8 +403,8 @@ export function BusinessProfilePage() {
                       Ver en el mapa
                     </a>
                     <span className="flex items-center gap-1 text-[10px] font-medium text-secondary-text">
-                      <LuInfo size={11} />
-                      La edición llegará pronto
+                      <LuMapPin size={11} />
+                      {address.latitud.toFixed(5)}, {address.longitud.toFixed(5)}
                     </span>
                   </div>
                 </div>
@@ -506,6 +514,7 @@ export function BusinessProfilePage() {
         <AddressFormModal
           onClose={() => setAddressModalOpen(false)}
           shopId={selectedShopId}
+          address={address}
           onSaved={reload}
         />
       )}

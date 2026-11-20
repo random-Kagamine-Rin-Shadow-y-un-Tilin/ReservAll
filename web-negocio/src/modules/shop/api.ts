@@ -2,10 +2,32 @@ import { fetchWithAuth } from "../../lib/api";
 import type { 
     ShopGeneralInfo, RegisterShopPayload, EditShopPayload, ShopContactInfo, 
     ShopContactRegister, ShopFullProfileOut, ShopScheduleRegister, ShopSheduleInfo, 
-    ShopAddressInfo, ShopAddressRegister,
+    ShopAddressInfo, ShopAddressRegister, ShopAddressUpdate,
 } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL
+
+async function getApiError(res: Response, fallback: string): Promise<string> {
+    try {
+        const data = await res.json()
+        const detail = data?.detail
+
+        if (typeof detail === "string") return detail
+        if (Array.isArray(detail)) {
+            return detail
+                .map((item) =>
+                    item && typeof item === "object" && "msg" in item
+                        ? String((item as { msg: unknown }).msg)
+                        : String(item),
+                )
+                .join(" · ")
+        }
+    } catch {
+        // Respuesta sin JSON: se usa el mensaje por defecto.
+    }
+
+    return fallback
+}
 
 
 //General info actions
@@ -199,8 +221,28 @@ export async function registerAddress(
     })
 
     if(!res.ok){
-        const error = await res.json()
-        throw new Error(error.detail || "Error al registrar dirección.")
+        throw new Error(
+            await getApiError(res, "Error al registrar dirección."),
+        )
+    }
+
+    return res.json()
+}
+
+export async function editAddress(
+    shopId: number,
+    data: ShopAddressUpdate,
+): Promise<ShopAddressInfo> {
+    const res = await fetchWithAuth(`${API_URL}/shop/edit-address/${shopId}`, {
+        method: 'PUT',
+        headers: {'Content-type': 'application/json'},
+        body: JSON.stringify(data),
+    })
+
+    if (!res.ok) {
+        throw new Error(
+            await getApiError(res, "No pudimos actualizar la dirección."),
+        )
     }
 
     return res.json()

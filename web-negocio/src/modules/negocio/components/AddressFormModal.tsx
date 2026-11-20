@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LuMapPin, LuMapPinned } from "react-icons/lu";
-import { registerAddress } from "../../shop/api";
-import type { ShopAddressRegister } from "../../shop/types";
+import { editAddress, registerAddress } from "../../shop/api";
+import type { ShopAddressInfo, ShopAddressRegister } from "../../shop/types";
 import { useGeoLocation } from "../../ubication/hooks/useGeoLocation";
 import { getAddressByCoord } from "../../ubication/api";
 import { MapSelector } from "../../ubication/components/MapSelector";
@@ -13,30 +13,49 @@ import { Spinner } from "../../../shared/components/ui/Feedback";
 interface AddressFormModalProps {
   onClose: () => void;
   shopId: number;
+  address?: ShopAddressInfo | null;
   onSaved: () => Promise<void> | void;
 }
 
 export function AddressFormModal({
   onClose,
   shopId,
+  address,
   onSaved,
 }: AddressFormModalProps) {
+  const editing = Boolean(address);
   const { coords, loading: geoLoading } = useGeoLocation();
-  const [form, setForm] = useState<ShopAddressRegister>({
-    direccion_calle: "",
-    ciudad: "",
-    estado: "",
-    codigo_postal: "",
-    pais: "México",
-    latitud: coords.lat,
-    longitud: coords.lng,
-    osm_id: "",
-    numero_local: "",
-    numero_interior: "",
-  });
+  const [form, setForm] = useState<ShopAddressRegister>(() => ({
+    direccion_calle: address?.direccion_calle ?? "",
+    ciudad: address?.ciudad ?? "",
+    estado: address?.estado ?? "",
+    codigo_postal: address?.codigo_postal ?? "",
+    pais: address?.pais ?? "México",
+    latitud: address?.latitud ?? coords.lat,
+    longitud: address?.longitud ?? coords.lng,
+    osm_id: address?.osm_id ?? "",
+    numero_local: address?.numero_local ?? "",
+    numero_interior: address?.numero_interior ?? "",
+  }));
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const initialPosition = address
+    ? { lat: address.latitud, lng: address.longitud }
+    : coords;
+
+  useEffect(() => {
+    // Al registrar, el mapa aparece cuando termina la geolocalización. Se
+    // sincronizan las coordenadas para no guardar el punto de respaldo.
+    if (editing || geoLoading) return;
+
+    setForm((current) => ({
+      ...current,
+      latitud: coords.lat,
+      longitud: coords.lng,
+    }));
+  }, [editing, geoLoading, coords.lat, coords.lng]);
 
   function update<K extends keyof ShopAddressRegister>(
     key: K,
@@ -55,11 +74,16 @@ export function AddressFormModal({
         ...data,
         latitud: position.lat,
         longitud: position.lng,
-        numero_local: current.numero_local,
-        numero_interior: current.numero_interior,
+        // El usuario suele conservar el número que ya había escrito.
+        numero_local: current.numero_local || data.numero_local,
+        numero_interior: current.numero_interior || data.numero_interior,
       }));
-    } catch {
-      setError("No pudimos obtener la dirección de ese punto. Intenta con otro.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No pudimos obtener la dirección de ese punto. Intenta con otro.",
+      );
     } finally {
       setLoadingAddress(false);
     }
@@ -82,12 +106,24 @@ export function AddressFormModal({
 
     setLoading(true);
     try {
-      await registerAddress(shopId, form);
+      if (editing) {
+        await editAddress(shopId, {
+          ...form,
+          numero_interior: form.numero_interior.trim() || null,
+        });
+      } else {
+        await registerAddress(shopId, form);
+      }
+
       await onSaved();
       onClose();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "No pudimos registrar la dirección.",
+        err instanceof Error
+          ? err.message
+          : editing
+            ? "No pudimos actualizar la dirección."
+            : "No pudimos registrar la dirección.",
       );
     } finally {
       setLoading(false);
@@ -98,19 +134,26 @@ export function AddressFormModal({
     <Modal
       isOpen
       onClose={onClose}
-      title="Registrar dirección"
-      description="Selecciona la ubicación en el mapa y completa los datos del local."
+      title={editing ? "Editar dirección" : "Registrar dirección"}
+      description={
+        editing
+          ? "Mueve el marcador o corrige los datos del local."
+          : "Selecciona la ubicación en el mapa y completa los datos del local."
+      }
       size="lg"
     >
       <div className="space-y-4">
-        {geoLoading ? (
+        {!editing && geoLoading ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface/60 text-secondary-text">
             <Spinner />
             <p className="text-xs font-medium">Detectando tu ubicación...</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-border">
-            <MapSelector initialPosition={coords} onChangePosition={handleChangePosition} />
+            <MapSelector
+              initialPosition={initialPosition}
+              onChangePosition={handleChangePosition}
+            />
           </div>
         )}
 
@@ -194,7 +237,7 @@ export function AddressFormModal({
             loading={loading}
             leftIcon={<LuMapPin size={15} />}
           >
-            Guardar dirección
+            {editing ? "Guardar cambios" : "Guardar dirección"}
           </Button>
         </div>
       </div>

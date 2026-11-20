@@ -6,6 +6,7 @@ import '/services/api_service.dart';
 import '/services/service_description_helper.dart';
 import '/models/service_model.dart';
 import '/services/service_detail_screen.dart';
+import '/screens/business/business_map_screen.dart';
 
 class BusinessDetailScreen extends StatefulWidget {
   const BusinessDetailScreen({super.key});
@@ -63,9 +64,14 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
     try {
       final result = await fetchShopDetail(initialShop.id);
       if (!mounted) return;
+
+      final resolvedShop = result.resolvedShop.copyWith(
+        distanciaKm: result.resolvedShop.distanciaKm ?? initialShop.distanciaKm,
+      );
+
       setState(() {
         detail = result;
-        shop = result.general;
+        shop = resolvedShop;
         isLoading = false;
       });
       await _checkIfFavorite(initialShop.id);
@@ -247,7 +253,10 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
     final imageUrl = _getImageUrl(currentShop.imagenNegocio);
     final addressText = _addressLabel();
     final hasDescription = currentShop.descripcion.trim().isNotEmpty;
-    final hasInfoCard = addressText != null || currentShop.precioMinimo != null;
+    final hasInfoCard =
+        addressText != null ||
+        currentShop.precioMinimo != null ||
+        currentShop.hasCoordinates;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -510,6 +519,34 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                   ),
                 ],
               ),
+            if (currentShop.hasCoordinates) ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: primaryColor,
+                    side: BorderSide(color: primaryColor),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BusinessMapScreen(
+                          shop: currentShop,
+                          formattedAddress: addressText,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text("Ver en mapa"),
+                ),
+              ),
+            ],
           ],
         ),
       ),

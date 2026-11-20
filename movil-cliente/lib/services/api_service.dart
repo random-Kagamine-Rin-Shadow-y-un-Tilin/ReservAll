@@ -36,9 +36,6 @@ Future<List<ShopCategory>> fetchCategories() async {
   throw Exception("Error al cargar categorías: ${response.statusCode}");
 }
 
-/// Búsqueda unificada del catálogo (HU_34 a HU_41).
-///
-/// Los filtros nulos se omiten para no enviar parámetros vacíos.
 Future<List<Shop>> searchCatalog({
   String? q,
   int? categoriaId,

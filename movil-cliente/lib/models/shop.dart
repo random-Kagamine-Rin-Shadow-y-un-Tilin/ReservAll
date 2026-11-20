@@ -7,6 +7,8 @@ class Shop {
   final int? idCategoria;
   final String? direccion;
   final String? ciudad;
+  final double? latitud;
+  final double? longitud;
   final double? valoracion;
   final double? precioMinimo;
   final double? precioMaximo;
@@ -23,6 +25,8 @@ class Shop {
     this.idCategoria,
     this.direccion,
     this.ciudad,
+    this.latitud,
+    this.longitud,
     this.valoracion,
     this.precioMinimo,
     this.precioMaximo,
@@ -31,7 +35,70 @@ class Shop {
     this.distanciaKm,
   });
 
+  bool get hasCoordinates =>
+      latitud != null &&
+      longitud != null &&
+      latitud!.isFinite &&
+      longitud!.isFinite &&
+      !(latitud == 0 && longitud == 0);
+
+  Shop copyWith({
+    double? latitud,
+    double? longitud,
+    double? distanciaKm,
+    String? direccion,
+  }) {
+    return Shop(
+      id: id,
+      nombre: nombre,
+      descripcion: descripcion,
+      imagenNegocio: imagenNegocio,
+      categoriaNegocio: categoriaNegocio,
+      idCategoria: idCategoria,
+      direccion: direccion ?? this.direccion,
+      ciudad: ciudad,
+      latitud: latitud ?? this.latitud,
+      longitud: longitud ?? this.longitud,
+      valoracion: valoracion,
+      precioMinimo: precioMinimo,
+      precioMaximo: precioMaximo,
+      serviciosCount: serviciosCount,
+      servicios: servicios,
+      distanciaKm: distanciaKm ?? this.distanciaKm,
+    );
+  }
+
   factory Shop.fromJson(Map<String, dynamic> json) {
+    final nestedAddress = json['direccion'] is Map
+        ? Map<String, dynamic>.from(json['direccion'] as Map)
+        : null;
+
+    final rawLat =
+        json['latitud'] ??
+        json['lat'] ??
+        json['latitude'] ??
+        nestedAddress?['latitud'] ??
+        nestedAddress?['lat'] ??
+        nestedAddress?['latitude'];
+
+    final rawLng =
+        json['longitud'] ??
+        json['lng'] ??
+        json['lon'] ??
+        json['longitude'] ??
+        nestedAddress?['longitud'] ??
+        nestedAddress?['lng'] ??
+        nestedAddress?['lon'] ??
+        nestedAddress?['longitude'];
+
+    final addressText = json['direccion'] is Map
+        ? _toStringOrNull(
+            nestedAddress?['direccion_completa'] ??
+                nestedAddress?['display_name'] ??
+                nestedAddress?['direccion_calle'],
+          )
+        : _toStringOrNull(json['direccion']);
+
     return Shop(
       id: _toInt(json['id']) ?? 0,
       nombre: json['nombre']?.toString() ?? '',
@@ -39,8 +106,10 @@ class Shop {
       imagenNegocio: json['imagen_negocio']?.toString() ?? '',
       categoriaNegocio: json['categoria_negocio']?.toString() ?? 'General',
       idCategoria: _toInt(json['id_categoria']),
-      direccion: _toStringOrNull(json['direccion']),
-      ciudad: _toStringOrNull(json['ciudad']),
+      direccion: addressText,
+      ciudad: _toStringOrNull(json['ciudad'] ?? nestedAddress?['ciudad']),
+      latitud: _toDouble(rawLat),
+      longitud: _toDouble(rawLng),
       valoracion: _toDouble(json['valoracion']),
       precioMinimo: _toDouble(json['precio_minimo']),
       precioMaximo: _toDouble(json['precio_maximo']),
@@ -61,7 +130,7 @@ class Shop {
   static double? _toDouble(dynamic value) {
     if (value == null) return null;
     if (value is num) return value.toDouble();
-    return double.tryParse(value.toString());
+    return double.tryParse(value.toString().trim());
   }
 
   static String? _toStringOrNull(dynamic value) {
@@ -104,6 +173,22 @@ class ShopDetail {
     this.horarios = const [],
     this.servicios = const [],
   });
+
+  Shop get resolvedShop {
+    final addr = direccion;
+    if (addr == null) return general;
+
+    final lat =
+        general.latitud ??
+        Shop._toDouble(addr['latitud'] ?? addr['lat'] ?? addr['latitude']);
+    final lng =
+        general.longitud ??
+        Shop._toDouble(
+          addr['longitud'] ?? addr['lng'] ?? addr['lon'] ?? addr['longitude'],
+        );
+
+    return general.copyWith(latitud: lat, longitud: lng);
+  }
 
   factory ShopDetail.fromJson(Map<String, dynamic> json) {
     return ShopDetail(

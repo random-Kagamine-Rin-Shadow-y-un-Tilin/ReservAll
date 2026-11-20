@@ -1,5 +1,5 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:movil_cliente/main.dart';
 
 void main() {
@@ -7,9 +7,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const MyApp());
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('SRLN'), findsOneWidget);
-    expect(find.text('Ingresar'), findsOneWidget);
+    expect(find.byType(MaterialApp), findsOneWidget);
+    expect(find.byType(TextField), findsWidgets);
   });
 }

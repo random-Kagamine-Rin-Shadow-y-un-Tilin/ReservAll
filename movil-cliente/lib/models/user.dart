@@ -11,7 +11,6 @@ class User {
     required this.rol,
   });
 
-  // Constructor desde JSON
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'].toString(),
@@ -21,13 +20,7 @@ class User {
     );
   }
 
-  // Convertir a JSON 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'nombre': nombre,
-      'correo': correo,
-      'rol': rol,
-    };
+    return {'id': id, 'nombre': nombre, 'correo': correo, 'rol': rol};
   }
 }

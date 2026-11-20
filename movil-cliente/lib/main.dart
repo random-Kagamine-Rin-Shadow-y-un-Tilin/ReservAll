@@ -8,7 +8,6 @@ import 'screens/booking/booking_screen.dart';
 import 'screens/booking/booking_create_screen.dart';
 import 'screens/booking/booking_list_screen.dart';
 import 'screens/favorites/favorites_screen.dart';
-import 'screens/booking/booking_list_screen.dart';
 
 void main() {
   runApp(const MyApp());

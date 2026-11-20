@@ -20,7 +20,8 @@ class LocationService {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return const LocationResult(
-        errorMessage: 'Activa la ubicación (GPS) en tu dispositivo para ver negocios cercanos.',
+        errorMessage:
+            'Activa la ubicación (GPS) en tu dispositivo para ver negocios cercanos.',
         openSettingsSuggested: true,
       );
     }
@@ -32,13 +33,15 @@ class LocationService {
 
     if (permission == LocationPermission.denied) {
       return const LocationResult(
-        errorMessage: 'Permiso de ubicación denegado. Concédelo para calcular distancias.',
+        errorMessage:
+            'Permiso de ubicación denegado. Concédelo para calcular distancias.',
       );
     }
 
     if (permission == LocationPermission.deniedForever) {
       return const LocationResult(
-        errorMessage: 'El permiso de ubicación está bloqueado permanentemente. Ábrelo en ajustes.',
+        errorMessage:
+            'El permiso de ubicación está bloqueado permanentemente. Ábrelo en ajustes.',
         openSettingsSuggested: true,
       );
     }
@@ -63,7 +66,12 @@ class LocationService {
     required double endLat,
     required double endLng,
   }) {
-    final meters = Geolocator.distanceBetween(startLat, startLng, endLat, endLng);
+    final meters = Geolocator.distanceBetween(
+      startLat,
+      startLng,
+      endLat,
+      endLng,
+    );
     return meters / 1000.0;
   }
 
@@ -76,17 +84,15 @@ class LocationService {
     final computed = <Shop>[];
 
     for (final shop in shops) {
-      double? dist = shop.distanciaKm;
-      if (shop.hasCoordinates) {
-        dist = distanceInKm(
-          startLat: userLat,
-          startLng: userLng,
-          endLat: shop.latitud!,
-          endLng: shop.longitud!,
-        );
-      }
+      if (!shop.hasCoordinates) continue;
 
-      if (dist == null) continue;
+      final dist = distanceInKm(
+        startLat: userLat,
+        startLng: userLng,
+        endLat: shop.latitud!,
+        endLng: shop.longitud!,
+      );
+
       if (maxRadiusKm != null && dist > maxRadiusKm) continue;
 
       computed.add(shop.copyWith(distanciaKm: dist));

@@ -15,15 +15,21 @@ class ReservaController extends ChangeNotifier {
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+  
+  // ---- Filtros ----
 
-  String? _errorMessage;
-  String? get errorMessage => _errorMessage;
-
-  EstadoReserva? _filtroEstado;
+ EstadoReserva? _filtroEstado;
   EstadoReserva? get filtroEstado => _filtroEstado;
 
   DateTime? _filtroFecha;
   DateTime? get filtroFecha => _filtroFecha;
+
+  int? _filtroProfesionalId;
+  int? get filtroProfesionalId => _filtroProfesionalId;
+
+    // ---- Profesionales del negocio ----
+  List<ProfesionalItem> _profesionales = [];
+  List<ProfesionalItem> get profesionales => _profesionales;
 
   int _page = 0;
   static const _pageSize = 20;

@@ -33,6 +33,17 @@ class ReservaService {
     return ReservasListResponse.fromJson(res.data as Map<String, dynamic>);
   }
 
+  Future<List<ProfesionalItem>> listarProfesionales(int negocioId) async {
+    final res = await _api.get('/professional/list/$negocioId');
+    final data = res.data;
+    final list = (data is Map && data['data'] is List)
+        ? data['data'] as List
+        : (data is List ? data : []);
+    return list
+        .map((e) => ProfesionalItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// GET /reservations/{id}
   Future<ReservaDetalle> detalle(int idReserva) async {
     final res = await _api.get('/reservations/$idReserva');

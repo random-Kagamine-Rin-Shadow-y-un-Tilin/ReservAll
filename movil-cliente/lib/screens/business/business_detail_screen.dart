@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '/models/shop.dart';
 import '/services/api_service.dart';
+import '/services/service_description_helper.dart';
+import '/models/service_model.dart';
+import '/services/service_detail_screen.dart';
 
 class BusinessDetailScreen extends StatefulWidget {
   const BusinessDetailScreen({super.key});
@@ -11,6 +16,7 @@ class BusinessDetailScreen extends StatefulWidget {
 
 class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
   bool isLoading = true;
+  bool isFavorite = false;
   String? errorMessage;
   Shop? shop;
   ShopDetail? detail;
@@ -62,12 +68,84 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         shop = result.general;
         isLoading = false;
       });
+      await _checkIfFavorite(initialShop.id);
     } catch (_) {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = "No se pudo cargar la información completa del negocio.";
+        errorMessage = "No se pudo cargar la información desde el servidor.";
       });
+    }
+  }
+
+  Future<void> _checkIfFavorite(dynamic shopId) async {
+    try {
+      final response = await http.get(
+        Uri.parse("$baseUrl/client/favorites"),
+        headers: {"accept": "application/json", "x-api-key": apiKey},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        List favs = [];
+        if (data is List) {
+          favs = data;
+        } else if (data is Map) {
+          favs = data['favorites'] ?? data['data'] ?? [];
+        }
+
+        final exists = favs.any((item) {
+          final id = item['id'] ?? item['id_negocio'] ?? item['business_id'];
+          return id.toString() == shopId.toString();
+        });
+
+        if (mounted) {
+          setState(() {
+            isFavorite = exists;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error al verificar favorito desde Supabase: $e");
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (shop == null) return;
+    final shopId = shop!.id;
+
+    try {
+      final endpoint = isFavorite
+          ? "/client/remove-favorite/$shopId"
+          : "/client/add-favorite/$shopId";
+
+      final response = await http.post(
+        Uri.parse("$baseUrl$endpoint"),
+        headers: {"accept": "application/json", "x-api-key": apiKey},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        setState(() {
+          isFavorite = !isFavorite;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isFavorite ? "Añadido a favoritos" : "Eliminado de favoritos",
+              ),
+              backgroundColor: primaryColor,
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      } else {
+        print(
+          "Error del servidor al modificar favorito: ${response.statusCode} - ${response.body}",
+        );
+      }
+    } catch (e) {
+      print("Error de conexión al modificar favorito: $e");
     }
   }
 
@@ -79,23 +157,14 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
       return img;
     }
     if (img.startsWith("/")) {
-      return "http://10.0.0.6:8000$img";
+      return "$baseUrl$img";
     }
-    return "http://10.0.0.6:8000/static/$img";
+    return "$baseUrl/static/$img";
   }
 
   String _dayLabel(String? value) {
-    const labels = {
-      "lunes": "Lunes",
-      "martes": "Martes",
-      "miercoles": "Miércoles",
-      "jueves": "Jueves",
-      "viernes": "Viernes",
-      "sabado": "Sábado",
-      "domingo": "Domingo",
-    };
-    final key = (value ?? '').toLowerCase().trim();
-    return labels[key] ?? (value ?? '');
+    if (value == null || value.trim().isEmpty) return '';
+    return value.trim();
   }
 
   String _timeLabel(dynamic value) {
@@ -107,22 +176,20 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
     return value.toString();
   }
 
-  String _addressLabel() {
+  String? _addressLabel() {
     final address = detail?.direccion;
     if (address == null) {
-      return shop?.direccion ?? "Ubicación no registrada";
+      final raw = shop?.direccion?.trim() ?? '';
+      return raw.isEmpty ? null : raw;
     }
 
-    final street =
-        [
-              address['direccion_calle'],
-              address['numero_local'],
-              address['numero_interior'],
-            ]
-            .where(
-              (value) => value != null && value.toString().trim().isNotEmpty,
-            )
-            .join(' ');
+    final street = [
+      address['direccion_calle'],
+      address['numero_local'],
+      address['numero_interior'],
+    ]
+        .where((value) => value != null && value.toString().trim().isNotEmpty)
+        .join(' ');
     final city = address['ciudad'];
     final state = address['estado'];
 
@@ -135,11 +202,11 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
       parts.add(state.toString());
     }
 
-    return parts.isEmpty ? "Ubicación no registrada" : parts.join(', ');
+    return parts.isEmpty ? null : parts.join(', ');
   }
 
   String _priceLabel(dynamic raw) {
-    if (raw == null) return 'Precio no disponible';
+    if (raw == null) return '';
     final value = double.tryParse(raw.toString());
     if (value == null) return '\$$raw';
     return '\$${value.toStringAsFixed(2)}';
@@ -168,7 +235,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              errorMessage ?? "Negocio no disponible.",
+              errorMessage ?? "",
               textAlign: TextAlign.center,
               style: TextStyle(color: textSecondaryColor),
             ),
@@ -178,6 +245,9 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
     }
 
     final imageUrl = _getImageUrl(currentShop.imagenNegocio);
+    final addressText = _addressLabel();
+    final hasDescription = currentShop.descripcion.trim().isNotEmpty;
+    final hasInfoCard = addressText != null || currentShop.precioMinimo != null;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -192,6 +262,15 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         backgroundColor: primaryColor,
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: isFavorite ? Colors.redAccent : Colors.white,
+            ),
+            onPressed: _toggleFavorite,
+          ),
+        ],
       ),
       body: RefreshIndicator(
         color: primaryColor,
@@ -202,37 +281,41 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeroImage(imageUrl),
-              const SizedBox(height: 20),
+              if (imageUrl.isNotEmpty) ...[
+                _buildHeroImage(imageUrl),
+                const SizedBox(height: 20),
+              ],
               _buildTitleRow(currentShop),
               const SizedBox(height: 20),
               if (errorMessage != null) ...[
                 _buildInlineWarning(errorMessage!),
                 const SizedBox(height: 16),
               ],
-              Text(
-                "Acerca del negocio",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: textMainColor,
+              if (hasDescription) ...[
+                Text(
+                  "Acerca del negocio",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: textMainColor,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                currentShop.descripcion.isNotEmpty
-                    ? currentShop.descripcion
-                    : "Sin descripción disponible.",
-                style: TextStyle(
-                  fontSize: 15,
-                  color: textSecondaryColor,
-                  height: 1.4,
+                const SizedBox(height: 8),
+                Text(
+                  currentShop.descripcion,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: textSecondaryColor,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.justify,
                 ),
-                textAlign: TextAlign.justify,
-              ),
-              const SizedBox(height: 20),
-              _buildInfoCard(currentShop),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
+              ],
+              if (hasInfoCard) ...[
+                _buildInfoCard(currentShop, addressText),
+                const SizedBox(height: 20),
+              ],
               if (detail != null && detail!.horarios.isNotEmpty) ...[
                 _buildScheduleSection(),
                 const SizedBox(height: 20),
@@ -295,15 +378,12 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: imageUrl.isNotEmpty
-            ? Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Center(
-                  child: Icon(Icons.store, size: 64, color: primaryColor),
-                ),
-              )
-            : Center(child: Icon(Icons.store, size: 64, color: primaryColor)),
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              Center(child: Icon(Icons.store, size: 64, color: primaryColor)),
+        ),
       ),
     );
   }
@@ -330,15 +410,16 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  Chip(
-                    label: Text(currentShop.categoriaNegocio),
-                    backgroundColor: secondaryColor.withValues(alpha: 0.15),
-                    labelStyle: TextStyle(
-                      color: secondaryColor,
-                      fontWeight: FontWeight.bold,
+                  if (currentShop.categoriaNegocio.trim().isNotEmpty)
+                    Chip(
+                      label: Text(currentShop.categoriaNegocio),
+                      backgroundColor: secondaryColor.withValues(alpha: 0.15),
+                      labelStyle: TextStyle(
+                        color: secondaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      padding: EdgeInsets.zero,
                     ),
-                    padding: EdgeInsets.zero,
-                  ),
                   if (currentShop.distanciaKm != null)
                     Chip(
                       avatar: Icon(
@@ -358,38 +439,33 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
             ],
           ),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.amber.shade400, width: 1.5),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                currentShop.valoracion == null ? Icons.star_border : Icons.star,
-                color: Colors.amber,
-                size: 20,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                currentShop.valoracion == null
-                    ? "Sin valorar"
-                    : currentShop.valoracion!.toStringAsFixed(1),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: textMainColor,
+        if (currentShop.valoracion != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber.shade400, width: 1.5),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.star, color: Colors.amber, size: 20),
+                const SizedBox(width: 4),
+                Text(
+                  currentShop.valoracion!.toStringAsFixed(1),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: textMainColor,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
 
-  Widget _buildInfoCard(Shop currentShop) {
+  Widget _buildInfoCard(Shop currentShop, String? addressText) {
     return Card(
       color: surfaceColor,
       elevation: 0,
@@ -398,41 +474,42 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Row(
-              children: [
-                Icon(Icons.location_on, color: primaryColor),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _addressLabel(),
-                    style: TextStyle(
-                      color: textMainColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+            if (addressText != null)
+              Row(
+                children: [
+                  Icon(Icons.location_on, color: primaryColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      addressText,
+                      style: TextStyle(
+                        color: textMainColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const Divider(height: 20),
-            Row(
-              children: [
-                Icon(Icons.payments_outlined, color: secondaryColor),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    currentShop.precioMinimo == null
-                        ? "Precio no disponible"
-                        : "Desde \$${currentShop.precioMinimo!.toStringAsFixed(0)}",
-                    style: TextStyle(
-                      color: textMainColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                ],
+              ),
+            if (addressText != null && currentShop.precioMinimo != null)
+              const Divider(height: 20),
+            if (currentShop.precioMinimo != null)
+              Row(
+                children: [
+                  Icon(Icons.payments_outlined, color: secondaryColor),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Desde \$${currentShop.precioMinimo!.toStringAsFixed(0)}",
+                      style: TextStyle(
+                        color: textMainColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       ),
@@ -486,8 +563,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                           style: TextStyle(color: textSecondaryColor),
                         ),
                   trailing: Text(
-                    "${_timeLabel(horario['hora_apertura'])} - "
-                    "${_timeLabel(horario['hora_cierre'])}",
+                    "${_timeLabel(horario['hora_apertura'])} - ${_timeLabel(horario['hora_cierre'])}",
                     style: TextStyle(color: textMainColor),
                   ),
                 );
@@ -521,31 +597,119 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
-            children: servicios.map((servicio) {
-              final duracion = servicio['duracion_minutos'];
+            children: servicios.map((rawServicio) {
+              final servicioMap = Map<String, dynamic>.from(rawServicio as Map);
+              final int sId = int.tryParse(
+                    (servicioMap['id_servicio'] ?? servicioMap['id'] ?? 0)
+                        .toString(),
+                  ) ??
+                  0;
+              final String sName = servicioMap['nombre']?.toString() ?? '';
+              final duracion = servicioMap['duracion_minutos'];
+              final precioTexto = _priceLabel(servicioMap['precio']);
+              final descripcionTexto = ServiceDescriptionHelper.resolve(
+                raw: servicioMap,
+                serviceId: sId > 0 ? sId : null,
+                serviceName: sName,
+              );
+
               return ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 leading: Icon(
                   Icons.check_circle_outline,
                   color: secondaryColor,
                 ),
                 title: Text(
-                  servicio['nombre']?.toString() ?? 'Servicio',
+                  sName,
                   style: TextStyle(
                     color: textMainColor,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                subtitle: Text(
-                  duracion == null ? "" : "$duracion min",
-                  style: TextStyle(color: textSecondaryColor),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (duracion != null)
+                      Text(
+                        "$duracion min",
+                        style: TextStyle(
+                          color: textSecondaryColor,
+                          fontSize: 13,
+                        ),
+                      ),
+                    const SizedBox(height: 2),
+                    Text(
+                      descripcionTexto,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: textSecondaryColor,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
-                trailing: Text(
-                  _priceLabel(servicio['precio']),
-                  style: TextStyle(
-                    color: primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (precioTexto.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          precioTexto,
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 20,
+                      color: textSecondaryColor,
+                    ),
+                  ],
                 ),
+                onTap: () {
+                  final enrichedMap = {
+                    ...servicioMap,
+                    'descripcion': descripcionTexto,
+                    'estado_servicio': servicioMap['estado_servicio'] ?? true,
+                    'cantidad_servicio': servicioMap['cantidad_servicio'] ?? 1,
+                    'negocio_id': int.tryParse(shop!.id.toString()) ?? 0,
+                    'nombre_negocio': shop!.nombre,
+                  };
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ServiceDetailScreen(
+                        serviceId: sId,
+                        initialService: ServiceModel.fromJson(enrichedMap),
+                        businessName: shop!.nombre,
+                        onReserveTap: () {
+                          Navigator.pop(context);
+                          Navigator.pushNamed(
+                            context,
+                            '/bookingCreate',
+                            arguments: shop,
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
               );
             }).toList(),
           ),

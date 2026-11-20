@@ -94,9 +94,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           }
         }
       });
-    } catch (_) {
-      // Las categorías son opcionales para poder mostrar el catálogo.
-    }
+    } catch (_) {}
   }
 
   Future<void> _loadShops() async {
@@ -445,7 +443,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   bool get _hasLocation => latitud != null && longitud != null;
 
   Widget _buildFilterBar() {
-    // HU_41: "más cercanos" solo tiene sentido si conocemos la ubicación.
     final sortEntries = _sortOptions.entries
         .where((entry) => entry.key != "distancia" || _hasLocation)
         .toList();

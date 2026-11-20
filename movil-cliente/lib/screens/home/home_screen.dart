@@ -32,6 +32,14 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('SRLN'),
         backgroundColor: const Color(0xFFE2725B),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.favorite, color: Colors.white),
+            onPressed: () {
+              Navigator.pushNamed(context, '/favorites');
+            },
+          ),
+        ],
       ),
       body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(

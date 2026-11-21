@@ -14,7 +14,7 @@ class BusinessListScreen extends StatefulWidget {
 }
 
 class _BusinessListScreenState extends State<BusinessListScreen> {
-  static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25, 100];
+  static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25, 50, 100];
   static const List<double> _priceMaxOptions = [200, 500, 1000];
   static const List<double> _ratingMinOptions = [3.0, 4.0, 4.5];
 

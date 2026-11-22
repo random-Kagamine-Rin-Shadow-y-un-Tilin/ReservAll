@@ -7,6 +7,7 @@ import '/services/service_description_helper.dart';
 import '/models/service_model.dart';
 import '/services/service_detail_screen.dart';
 import '/screens/business/business_map_screen.dart';
+import '/screens/business/business_route_map_screen.dart';
 
 class BusinessDetailScreen extends StatefulWidget {
   const BusinessDetailScreen({super.key});
@@ -546,6 +547,36 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                   label: const Text("Ver en mapa"),
                 ),
               ),
+              if (currentShop.latitud != null &&
+                  currentShop.longitud != null) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: secondaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BusinessRouteMapScreen(
+                            businessName: currentShop.nombre,
+                            businessLat: currentShop.latitud!,
+                            businessLng: currentShop.longitud!,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.directions, size: 18),
+                    label: const Text("Cómo llegar"),
+                  ),
+                ),
+              ],
             ],
           ],
         ),

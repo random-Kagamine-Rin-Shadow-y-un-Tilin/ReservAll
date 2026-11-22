@@ -99,6 +99,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
               builder: (_) => const RegisterShopScreen(),
             ),
           ).then((_) {
+            if (!context.mounted) return;
             context.read<ShopController>().getMyShops();
           });
         },
@@ -176,6 +177,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
                     builder: (_) => const RegisterShopScreen(),
                   ),
                 ).then((_) {
+                  if (!mounted) return;
                   context.read<ShopController>().getMyShops();
                 });
               },
@@ -277,6 +279,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
               builder: (_) => ShopDetailScreen(shopId: shop.id!),
             ),
           ).then((_) {
+            if (!context.mounted) return;
             context.read<ShopController>().getMyShops();
           });
         },

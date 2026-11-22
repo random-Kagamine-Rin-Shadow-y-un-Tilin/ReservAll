@@ -15,7 +15,10 @@ class ReservaController extends ChangeNotifier {
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
-  
+
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
+
   // ---- Filtros ----
 
  EstadoReserva? _filtroEstado;
@@ -27,8 +30,11 @@ class ReservaController extends ChangeNotifier {
   int? _filtroProfesionalId;
   int? get filtroProfesionalId => _filtroProfesionalId;
 
-    // ---- Profesionales del negocio ----
-  List<ProfesionalItem> _profesionales = [];
+  bool get hayFiltrosActivos =>
+      _filtroEstado != null || _filtroFecha != null || _filtroProfesionalId != null;
+
+  // ---- Profesionales del negocio ----
+  final List<ProfesionalItem> _profesionales = [];
   List<ProfesionalItem> get profesionales => _profesionales;
 
   int _page = 0;
@@ -58,6 +64,7 @@ class ReservaController extends ChangeNotifier {
         negocioId: negocioId,
         estado: _filtroEstado,
         fecha: _filtroFecha,
+        profesionalId: _filtroProfesionalId,
         limit: _pageSize,
         offset: _page * _pageSize,
       );
@@ -87,14 +94,30 @@ class ReservaController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setFiltroProfesional(int? id) {
+    _filtroProfesionalId = id;
+    notifyListeners();
+  }
+
+  Future<void> cargarProfesionales(int negocioId) async {
+    try {
+      _profesionales
+        ..clear()
+        ..addAll(await _service.listarProfesionales(negocioId));
+    } catch (e) {
+      _errorMessage = _msg(e);
+    }
+    notifyListeners();
+  }
+
   // ================= DETALLE =================
-  Future<void> cargarDetalle(int idReserva) async {
+  Future<void> cargarDetalle(int negocioId, int idReserva) async {
     _isLoading = true;
     _errorMessage = null;
     _detalle = null;
     notifyListeners();
     try {
-      _detalle = await _service.detalle(idReserva);
+      _detalle = await _service.detalle(negocioId, idReserva);
     } catch (e) {
       _errorMessage = _msg(e);
     } finally {
@@ -118,7 +141,7 @@ class ReservaController extends ChangeNotifier {
     }
 
     try {
-      await _service.confirmar(idReserva);
+      await _service.confirmar(negocioId, idReserva);
       // Refresco silencioso para traer datos del backend
       await cargar(negocioId: negocioId, reset: true);
       return true;
@@ -150,7 +173,7 @@ class ReservaController extends ChangeNotifier {
     }
 
     try {
-      await _service.rechazar(idReserva, motivo);
+      await _service.rechazar(negocioId, idReserva, motivo);
       await cargar(negocioId: negocioId, reset: true);
       return true;
     } catch (e) {
@@ -166,5 +189,5 @@ class ReservaController extends ChangeNotifier {
     }
   }
 
-  String _msg(Object e) => e.toString();
+  String _msg(Object e) => e.toString().replaceFirst('Exception: ', '');
 }

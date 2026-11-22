@@ -9,7 +9,7 @@ class RouteInfo {
   final double durationSeconds;
   final bool isEstimatedFallback;
 
-  RouteInfo({ 
+  RouteInfo({
     required this.points,
     required this.distanceMeters,
     required this.durationSeconds,

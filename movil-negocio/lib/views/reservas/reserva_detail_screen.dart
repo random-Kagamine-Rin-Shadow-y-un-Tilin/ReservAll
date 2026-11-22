@@ -7,8 +7,13 @@ import '../../models/reserva_model.dart';
 import '../widgets/estado_reserva_chip.dart';
 
 class ReservaDetailScreen extends StatefulWidget {
+  final int negocioId;
   final int idReserva;
-  const ReservaDetailScreen({super.key, required this.idReserva});
+  const ReservaDetailScreen({
+    super.key,
+    required this.negocioId,
+    required this.idReserva,
+  });
 
   @override
   State<ReservaDetailScreen> createState() => _ReservaDetailScreenState();
@@ -19,7 +24,10 @@ class _ReservaDetailScreenState extends State<ReservaDetailScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReservaController>().cargarDetalle(widget.idReserva);
+      context.read<ReservaController>().cargarDetalle(
+            widget.negocioId,
+            widget.idReserva,
+          );
     });
   }
 
@@ -47,7 +55,10 @@ class _ReservaDetailScreenState extends State<ReservaDetailScreen> {
                       style: const TextStyle(color: AppColors.error)),
                   const SizedBox(height: 8),
                   OutlinedButton(
-                    onPressed: () => ctrl.cargarDetalle(widget.idReserva),
+                    onPressed: () => ctrl.cargarDetalle(
+                          widget.negocioId,
+                          widget.idReserva,
+                        ),
                     child: const Text('Reintentar'),
                   ),
                 ],

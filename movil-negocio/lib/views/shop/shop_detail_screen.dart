@@ -579,6 +579,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       'Se eliminará "${contact.nombreRed}".',
     );
     if (ok != true) return;
+    if (!mounted) return;
 
     final controller = context.read<ShopController>();
     final success = await controller.deleteContact(
@@ -624,6 +625,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       'Se eliminará el horario del ${schedule.dia}.',
     );
     if (ok != true) return;
+    if (!mounted) return;
 
     final controller = context.read<ShopController>();
     final success = await controller.deleteSchedule(
@@ -671,6 +673,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       'El negocio será desactivado y los clientes no podrán verlo.',
     );
     if (ok != true) return;
+    if (!mounted) return;
 
     final controller = context.read<ShopController>();
     final success = await controller.deleteShop(shopId);

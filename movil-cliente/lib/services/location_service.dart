@@ -1,5 +1,5 @@
 import 'package:geolocator/geolocator.dart';
-import '/models/shop.dart';
+import 'package:movil_cliente/models/shop.dart';
 
 class LocationResult {
   final Position? position;

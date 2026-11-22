@@ -8,7 +8,9 @@ import 'services/api_service.dart';
 import 'views/auth/login_screen.dart';
 import 'views/home/home_screen.dart';
 import 'controllers/profesional_controller.dart';
+import 'controllers/reserva_controller.dart';
 import 'controllers/service_controller.dart';
+import 'services/reserva_service.dart';
 
 void main() {
   ApiService().init();
@@ -27,6 +29,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => UserController()),
         ChangeNotifierProvider(create: (_) => ProfesionalController()),
         ChangeNotifierProvider(create: (_) => ServiceController()),
+        ChangeNotifierProvider(
+          create: (_) => ReservaController(ReservaService(ApiService())),
+        ),
       ],
       child: MaterialApp(
         title: 'SRNL Back',

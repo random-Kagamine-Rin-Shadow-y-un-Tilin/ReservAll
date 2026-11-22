@@ -27,7 +27,7 @@ class DistanceFilterHelper {
         return shop.copyWith(distanciaKm: meters / 1000.0);
       }
       return shop;
-    }).toList();  
+    }).toList(); 
   }
 
   static List<Shop> filterAndSortByProximity({

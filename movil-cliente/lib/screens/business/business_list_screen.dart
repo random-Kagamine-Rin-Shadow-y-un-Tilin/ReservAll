@@ -14,7 +14,7 @@ class BusinessListScreen extends StatefulWidget {
 }
 
 class _BusinessListScreenState extends State<BusinessListScreen> {
-  static const List<double> _radiusOptionsKm = [1, 5, 10, 25, 50, 100];
+  static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25];
 
   List<Shop> shops = [];
   List<ShopCategory> categories = [];
@@ -133,12 +133,9 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           userLng: longitud!,
           maxRadiusKm: radioKm,
         );
-
-        result = result
-            .where((s) => s.distanciaKm != null && s.distanciaKm! <= radioKm)
-            .toList();
-
-        _sortShops(result, orden);
+        if (orden != "distancia") {
+          _sortShops(result, orden);
+        }
       }
 
       if (!mounted || requestId != _requestId) return;
@@ -225,19 +222,9 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     _loadShops();
   }
 
-  Future<void> _selectRadius(double radius) async {
-    setState(() {
-      radioKm = radius;
-      if (_hasLocation) {
-        orden = "distancia";
-      }
-    });
-
-    if (!_hasLocation) {
-      await _useMyLocation();
-      return;
-    }
-
+  void _selectRadius(double radius) {
+    if (radioKm == radius) return;
+    setState(() => radioKm = radius);
     _loadShops();
   }
 
@@ -473,7 +460,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           ),
           _buildCategoryChips(),
           _buildFilterBar(),
-          _buildRadiusChips(),
+          if (_hasLocation) _buildRadiusChips(),
           const SizedBox(height: 4),
           Expanded(child: _buildBody()),
         ],
@@ -528,7 +515,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           if (index == 0) {
             return Center(
               child: Text(
-                "Distancia máxima:",
+                "Radio:",
                 style: TextStyle(
                   color: textSecondaryColor,
                   fontSize: 12,
@@ -539,14 +526,14 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           }
 
           final radius = _radiusOptionsKm[index - 1];
-          final isSelected = _hasLocation && radioKm == radius;
+          final isSelected = radioKm == radius;
           return ChoiceChip(
             visualDensity: VisualDensity.compact,
             label: Text("${radius.toStringAsFixed(0)} km"),
             selected: isSelected,
             backgroundColor: surfaceColor,
             selectedColor: primaryColor,
-            onSelected: locating ? null : (_) => _selectRadius(radius),
+            onSelected: (_) => _selectRadius(radius),
             labelStyle: TextStyle(
               color: isSelected ? Colors.white : textMainColor,
               fontSize: 12,
@@ -654,7 +641,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       label: Text(
         _hasLocation
             ? "Cerca · ${radioKm.toStringAsFixed(0)} km"
-            : "Cercano a mi",
+            : "Cercanos",
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );

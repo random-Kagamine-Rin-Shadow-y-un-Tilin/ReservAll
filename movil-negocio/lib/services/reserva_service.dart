@@ -5,7 +5,7 @@ class ReservaService {
   final ApiService _api;
   ReservaService(this._api);
 
-  /// GET /reservations/negocio/{negocioId}
+  /// GET /owner/{negocioId}/reservations
   Future<ReservasListResponse> listarPorNegocio({
     required int negocioId,
     EstadoReserva? estado,
@@ -20,16 +20,16 @@ class ReservaService {
       'limit': limit,
       'offset': offset,
       if (estado != null) 'estado': estado.name,
-      if (fecha != null) 'fecha': _d(fecha),
+      ...(fecha != null
+          ? {'fecha_desde': _d(fecha), 'fecha_hasta': _d(fecha)}
+          : <String, String>{}),
       if (fechaDesde != null) 'fecha_desde': _d(fechaDesde),
       if (fechaHasta != null) 'fecha_hasta': _d(fechaHasta),
       if (profesionalId != null) 'profesional_id': profesionalId,
     };
 
-    // AJUSTA: si tu ApiService devuelve Response de Dio
-    final res = await _api.get('/reservations/negocio/$negocioId',
-        queryParameters: query);
-    // AJUSTA: si devuelve wrapper -> res.data['data']
+    final res = await _api.get('/owner/$negocioId/reservations',
+        queryParams: query);
     return ReservasListResponse.fromJson(res.data as Map<String, dynamic>);
   }
 
@@ -44,22 +44,22 @@ class ReservaService {
         .toList();
   }
 
-  /// GET /reservations/{id}
-  Future<ReservaDetalle> detalle(int idReserva) async {
-    final res = await _api.get('/reservations/$idReserva');
+  /// GET /owner/{negocioId}/reservations/{idReserva}
+  Future<ReservaDetalle> detalle(int negocioId, int idReserva) async {
+    final res = await _api.get('/owner/$negocioId/reservations/$idReserva');
     return ReservaDetalle.fromJson(res.data as Map<String, dynamic>);
   }
 
-  /// PATCH /reservations/{id}/confirm
-  Future<void> confirmar(int idReserva) async {
-    await _api.patch('/reservations/$idReserva/confirm');
+  /// POST /owner/{negocioId}/reservations/{idReserva}/confirm
+  Future<void> confirmar(int negocioId, int idReserva) async {
+    await _api.post('/owner/$negocioId/reservations/$idReserva/confirm');
   }
 
-  /// PATCH /reservations/{id}/reject
-  Future<void> rechazar(int idReserva, String motivo) async {
-    await _api.patch(
-      '/reservations/$idReserva/reject',
-      data: {'motivo': motivo},
+  /// POST /owner/{negocioId}/reservations/{idReserva}/reject
+  Future<void> rechazar(int negocioId, int idReserva, String motivo) async {
+    await _api.post(
+      '/owner/$negocioId/reservations/$idReserva/reject',
+      body: {'motivo': motivo},
     );
   }
 

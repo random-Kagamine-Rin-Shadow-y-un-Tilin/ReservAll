@@ -55,6 +55,7 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al seleccionar imagen: $e')),
       );

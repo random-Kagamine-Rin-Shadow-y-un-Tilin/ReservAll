@@ -71,7 +71,7 @@ export function RegisterAddressForm({onSuccess}:  {onSuccess: ()=> void}){
                 longitud: coords.lng
             })
 
-        } catch (err){
+        } catch {
             setError('No se pudo obtener la dirección. Intenta con otra ubicación.')
         } finally{
             setLoadingAddress(false)

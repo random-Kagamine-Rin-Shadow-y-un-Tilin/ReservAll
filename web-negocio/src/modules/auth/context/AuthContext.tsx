@@ -6,7 +6,7 @@ import { loginUser, registerUser, logOut, getCurrentUser } from "../api";
 interface AuthContextType{
     user: User | null
     loading : boolean
-    login: (payload: LoginPayLoad) => Promise<void>
+    login: (payload: LoginPayLoad) => Promise<User>
     register: (payload: RegisterPayload) => Promise<void>
     logout: () => Promise<void>
 }
@@ -27,6 +27,7 @@ export function AuthProvider({children}: {children: ReactNode}){
     async function login(payload:LoginPayLoad) {
         const userLogin = await loginUser(payload)
         setUser(userLogin)
+        return userLogin
     }
 
     async function register(payload:RegisterPayload) {

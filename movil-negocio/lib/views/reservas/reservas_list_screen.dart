@@ -5,6 +5,7 @@ import '../../config/app_colors.dart';
 import '../../controllers/reserva_controller.dart';
 import '../../models/reserva_model.dart';
 import '../widgets/reserva_card.dart';
+import '../widgets/rechazar_reserva_dialogo.dart';
 import 'reserva_detail_screen.dart';
 
 class ReservasListScreen extends StatefulWidget {
@@ -17,12 +18,14 @@ class ReservasListScreen extends StatefulWidget {
 
 class _ReservasListScreenState extends State<ReservasListScreen> {
   final _scroll = ScrollController();
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    final ctrl = context.read<ReservaController>();
+    _searchCtrl.text = ctrl.filtroSearch ?? '';
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctrl = context.read<ReservaController>();
       ctrl.cargar(negocioId: widget.negocioId);
       ctrl.cargarProfesionales(widget.negocioId);
     });
@@ -36,8 +39,51 @@ class _ReservasListScreenState extends State<ReservasListScreen> {
 
   @override
   void dispose() {
+    _searchCtrl.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _buscar() async {
+    final ctrl = context.read<ReservaController>();
+    ctrl.setFiltroSearch(_searchCtrl.text);
+    await ctrl.cargar(negocioId: widget.negocioId);
+  }
+
+  Future<void> _cambiarModo(bool historial) async {
+    final ctrl = context.read<ReservaController>();
+    ctrl.setHistorial(historial);
+    await ctrl.cargar(negocioId: widget.negocioId);
+  }
+
+  Future<void> _confirmarReserva(ReservaListItem r) async {
+    final ctrl = context.read<ReservaController>();
+    final ok = await ctrl.confirmar(widget.negocioId, r.idReserva);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? '✅ Reserva #${r.idReserva} confirmada'
+            : (ctrl.errorMessage ?? 'No se pudo confirmar')),
+        backgroundColor: ok ? AppColors.success : AppColors.error,
+      ),
+    );
+  }
+
+  Future<void> _rechazarReserva(ReservaListItem r) async {
+    final motivo = await showRechazarReservaDialog(context);
+    if (motivo == null || !mounted) return;
+    final ctrl = context.read<ReservaController>();
+    final ok = await ctrl.rechazar(widget.negocioId, r.idReserva, motivo);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Reserva #${r.idReserva} rechazada'
+            : (ctrl.errorMessage ?? 'No se pudo rechazar')),
+        backgroundColor: ok ? AppColors.success : AppColors.error,
+      ),
+    );
   }
 
   @override
@@ -59,7 +105,63 @@ class _ReservasListScreenState extends State<ReservasListScreen> {
         builder: (context, ctrl, _) {
           return Column(
             children: [
-              _FiltrosActivos(ctrl: ctrl, negocioId: widget.negocioId),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: TextField(
+                  controller: _searchCtrl,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _buscar(),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Buscar por cliente o correo',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Limpiar búsqueda',
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        _buscar();
+                      },
+                    ),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Próximas'),
+                      selected: !ctrl.historial,
+                      selectedColor: AppColors.primary.withOpacity(0.15),
+                      onSelected: (_) => _cambiarModo(false),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Historial'),
+                      selected: ctrl.historial,
+                      selectedColor: AppColors.primary.withOpacity(0.15),
+                      onSelected: (_) => _cambiarModo(true),
+                    ),
+                    if (ctrl.hayFiltrosActivos)
+                      ActionChip(
+                        avatar: const Icon(Icons.filter_alt_off, size: 16),
+                        label: const Text('Limpiar filtros'),
+                        onPressed: () {
+                          ctrl.limpiarFiltros();
+                          _searchCtrl.clear();
+                          ctrl.cargar(negocioId: widget.negocioId);
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              _FiltrosActivos(
+                ctrl: ctrl,
+                negocioId: widget.negocioId,
+                onLimpiarSearch: () => _searchCtrl.clear(),
+              ),
               Expanded(
                 child: RefreshIndicator(
                   color: AppColors.primary,
@@ -120,8 +222,10 @@ class _ReservasListScreenState extends State<ReservasListScreen> {
           );
         }
         final r = ctrl.items[i];
+        final enCurso = ctrl.accionEnCursoId == r.idReserva;
         return ReservaCard(
           reserva: r,
+          accionEnCurso: enCurso,
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -131,7 +235,8 @@ class _ReservasListScreenState extends State<ReservasListScreen> {
                   ),
             ),
           ),
-          // Sin onConfirmar/onRechazar → solo lectura
+          onConfirmar: enCurso ? null : () => _confirmarReserva(r),
+          onRechazar: enCurso ? null : () => _rechazarReserva(r),
         );
       },
     );
@@ -160,7 +265,12 @@ class _ReservasListScreenState extends State<ReservasListScreen> {
 class _FiltrosActivos extends StatelessWidget {
   final ReservaController ctrl;
   final int negocioId;
-  const _FiltrosActivos({required this.ctrl, required this.negocioId});
+  final VoidCallback onLimpiarSearch;
+  const _FiltrosActivos({
+    required this.ctrl,
+    required this.negocioId,
+    required this.onLimpiarSearch,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +283,15 @@ class _FiltrosActivos extends StatelessWidget {
         spacing: 8,
         runSpacing: 4,
         children: [
+          if (ctrl.filtroSearch != null)
+            Chip(
+              label: Text('“${ctrl.filtroSearch}”'),
+              onDeleted: () {
+                ctrl.setFiltroSearch(null);
+                onLimpiarSearch();
+                ctrl.cargar(negocioId: negocioId);
+              },
+            ),
           if (ctrl.filtroEstado != null)
             Chip(
               label: Text(ctrl.filtroEstado!.label),

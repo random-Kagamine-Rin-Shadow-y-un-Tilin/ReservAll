@@ -113,7 +113,10 @@ class ApiService {
     }
 
     if (e.type == DioExceptionType.connectionError) {
-      return Exception('No se puede conectar al servidor.');
+      return Exception(
+        'No se puede conectar a $baseUrl. Revisa que el backend esté activo '
+        'y, si usas USB, que esté configurado: adb reverse tcp:8000 tcp:8000',
+      );
     }
 
     if (e.response != null) {

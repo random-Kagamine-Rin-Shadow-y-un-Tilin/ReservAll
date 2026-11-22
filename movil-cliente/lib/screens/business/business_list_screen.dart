@@ -14,7 +14,9 @@ class BusinessListScreen extends StatefulWidget {
 }
 
 class _BusinessListScreenState extends State<BusinessListScreen> {
-  static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25];
+  static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25, 50, 100];
+  static const List<double> _priceMaxOptions = [200, 500, 1000];
+  static const List<double> _ratingMinOptions = [3.0, 4.0, 4.5];
 
   List<Shop> shops = [];
   List<ShopCategory> categories = [];
@@ -29,10 +31,11 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   String selectedCategory = "Todos";
   int? selectedCategoryId;
   String query = "";
-  String ciudad = "";
   String orden = "relevancia";
   DateTime? disponibleFecha;
   TimeOfDay? disponibleHora;
+  double? maxPrecio;
+  double? minValoracion;
   double? latitud;
   double? longitud;
   double radioKm = 5;
@@ -117,7 +120,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         categoria: selectedCategoryId == null && selectedCategory != "Todos"
             ? selectedCategory
             : null,
-        ciudad: ciudad.isEmpty ? null : ciudad,
         lat: latitud,
         lng: longitud,
         radioKm: _hasLocation ? radioKm : null,
@@ -133,10 +135,9 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           userLng: longitud!,
           maxRadiusKm: radioKm,
         );
-        if (orden != "distancia") {
-          _sortShops(result, orden);
-        }
       }
+
+      result = _applyClientFiltersAndSort(List<Shop>.from(result));
 
       if (!mounted || requestId != _requestId) return;
       setState(() {
@@ -153,7 +154,53 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     }
   }
 
-  void _sortShops(List<Shop> list, String sortKey) {
+  List<Shop> _applyClientFiltersAndSort(List<Shop> list) {
+    final q = query.trim().toLowerCase();
+
+    var filtered = list.where((shop) {
+      if (q.isNotEmpty) {
+        final inName = shop.nombre.toLowerCase().contains(q);
+        final inCategory = shop.categoriaNegocio.toLowerCase().contains(q);
+        final inServices = shop.servicios.any(
+          (srv) => srv.toLowerCase().contains(q),
+        );
+        if (!inName && !inCategory && !inServices) {
+          return false;
+        }
+      }
+
+      if (maxPrecio != null) {
+        final refPrice = shop.precioMinimo ?? shop.precioMaximo;
+        if (refPrice == null || refPrice > maxPrecio!) {
+          return false;
+        }
+      }
+
+      if (minValoracion != null) {
+        if (shop.valoracion == null || shop.valoracion! < minValoracion!) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+
+    _sortShops(filtered, orden, queryText: q);
+    return filtered;
+  }
+
+  int _relevanceScore(Shop shop, String q) {
+    if (q.isEmpty) return 0;
+    final name = shop.nombre.toLowerCase();
+    final cat = shop.categoriaNegocio.toLowerCase();
+    if (name == q) return 0;
+    if (name.startsWith(q)) return 1;
+    if (name.contains(q)) return 2;
+    if (cat.contains(q)) return 3;
+    return 4;
+  }
+
+  void _sortShops(List<Shop> list, String sortKey, {String queryText = ""}) {
     switch (sortKey) {
       case "nombre":
         list.sort(
@@ -178,11 +225,23 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         );
         break;
       case "distancia":
-      default:
         list.sort(
           (a, b) => (a.distanciaKm ?? double.infinity)
               .compareTo(b.distanciaKm ?? double.infinity),
         );
+        break;
+      case "relevancia":
+      default:
+        if (queryText.isNotEmpty) {
+          list.sort((a, b) {
+            final scoreDiff = _relevanceScore(
+              a,
+              queryText,
+            ).compareTo(_relevanceScore(b, queryText));
+            if (scoreDiff != 0) return scoreDiff;
+            return (b.valoracion ?? -1).compareTo(a.valoracion ?? -1);
+          });
+        }
         break;
     }
   }
@@ -228,37 +287,75 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     _loadShops();
   }
 
-  Future<void> _openCityFilter() async {
-    final controller = TextEditingController(text: ciudad);
-    final result = await showDialog<String>(
+  Future<void> _openPriceFilter() async {
+    final selected = await showModalBottomSheet<double?>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Filtrar por ubicación"),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: "Ciudad",
-            hintText: "Ej. Huamantla",
-          ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                "Filtrar por precio máximo",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              title: const Text("Cualquier precio"),
+              trailing: maxPrecio == null ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.pop(context, null),
+            ),
+            ..._priceMaxOptions.map(
+              (price) => ListTile(
+                title: Text("Hasta \$${price.toStringAsFixed(0)}"),
+                trailing: maxPrecio == price ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(context, price),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text("Aplicar"),
-          ),
-        ],
       ),
     );
 
-    controller.dispose();
-    if (result == null) return;
-    setState(() => ciudad = result.trim());
+    if (!mounted) return;
+    setState(() => maxPrecio = selected);
+    _loadShops();
+  }
+
+  Future<void> _openRatingFilter() async {
+    final selected = await showModalBottomSheet<double?>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                "Filtrar por valoración mínima",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              title: const Text("Cualquier valoración"),
+              trailing: minValoracion == null ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.pop(context, null),
+            ),
+            ..._ratingMinOptions.map(
+              (rating) => ListTile(
+                title: Text("${rating.toStringAsFixed(1)}+ estrellas"),
+                trailing: minValoracion == rating
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(context, rating),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => minValoracion = selected);
     _loadShops();
   }
 
@@ -348,12 +445,13 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     searchController.clear();
     setState(() {
       query = "";
-      ciudad = "";
       selectedCategory = "Todos";
       selectedCategoryId = null;
       orden = "relevancia";
       disponibleFecha = null;
       disponibleHora = null;
+      maxPrecio = null;
+      minValoracion = null;
       latitud = null;
       longitud = null;
       radioKm = 5;
@@ -363,9 +461,10 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
 
   bool get _hasActiveFilters =>
       query.isNotEmpty ||
-      ciudad.isNotEmpty ||
       selectedCategory != "Todos" ||
       disponibleFecha != null ||
+      maxPrecio != null ||
+      minValoracion != null ||
       latitud != null ||
       orden != "relevancia";
 
@@ -469,9 +568,17 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   }
 
   Widget _buildCategoryChips() {
+    final orderedCategories = List<ShopCategory>.from(categories)
+      ..sort((a, b) {
+        final aIsOther = a.nombre.trim().toLowerCase() == "otro";
+        final bIsOther = b.nombre.trim().toLowerCase() == "otro";
+        if (aIsOther == bIsOther) return 0;
+        return aIsOther ? 1 : -1;
+      });
+
     final items = <Widget>[
       _categoryChip("Todos", null),
-      ...categories.map(
+      ...orderedCategories.map(
         (category) => _categoryChip(category.nombre, category.id),
       ),
     ];
@@ -589,11 +696,22 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           const SizedBox(width: 6),
           _nearbyActionButton(),
           const SizedBox(width: 6),
-          _filterButton(
-            icon: Icons.location_on_outlined,
-            active: ciudad.isNotEmpty,
-            tooltip: "Filtrar por ciudad",
-            onPressed: _openCityFilter,
+          _filterChipButton(
+            label: maxPrecio == null
+                ? "Precio"
+                : "≤ \$${maxPrecio!.toStringAsFixed(0)}",
+            icon: Icons.payments_outlined,
+            active: maxPrecio != null,
+            onPressed: _openPriceFilter,
+          ),
+          const SizedBox(width: 6),
+          _filterChipButton(
+            label: minValoracion == null
+                ? "Valoración"
+                : "${minValoracion!.toStringAsFixed(1)}+",
+            icon: Icons.star_outline,
+            active: minValoracion != null,
+            onPressed: _openRatingFilter,
           ),
           const SizedBox(width: 6),
           _filterButton(
@@ -612,6 +730,28 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _filterChipButton({
+    required String label,
+    required IconData icon,
+    required bool active,
+    required VoidCallback onPressed,
+  }) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: active ? secondaryColor : surfaceColor,
+        foregroundColor: active ? Colors.white : textMainColor,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      icon: Icon(icon, size: 17, color: active ? Colors.white : primaryColor),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
   }

@@ -300,6 +300,7 @@ class HomeTab extends StatelessWidget {
                           builder: (_) => const RegisterShopScreen(),
                         ),
                       ).then((_) {
+                        if (!context.mounted) return;
                         context.read<ShopController>().getMyShops();
                       });
                     },
@@ -394,6 +395,7 @@ class HomeTab extends StatelessWidget {
                   context,
                   MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
                 ).then((_) {
+                  if (!context.mounted) return;
                   context.read<ShopController>().getMyShops();
                 });
               },

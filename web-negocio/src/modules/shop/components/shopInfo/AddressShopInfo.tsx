@@ -19,8 +19,8 @@ export function AddressShopInfo({shop}: AddressShopInfoProps){
         try{
             const data = await getAddress(Number(shopId))
             setAddress(data)
-        } catch(err){
-            console.error("Error")
+        } catch {
+            console.error("No pudimos actualizar la dirección.")
         }
     }, [shopId])
 

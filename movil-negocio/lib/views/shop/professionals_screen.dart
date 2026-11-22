@@ -84,6 +84,7 @@ class _ProfessionalsScreenState extends State<ProfessionalsScreen> {
             MaterialPageRoute(builder: (_) => AddProfessionalScreen(shopId: widget.shopId)),
           );
           if (result == true) {
+            if (!context.mounted) return;
             context.read<ProfesionalController>().loadProfessionals(widget.shopId);
           }
         },

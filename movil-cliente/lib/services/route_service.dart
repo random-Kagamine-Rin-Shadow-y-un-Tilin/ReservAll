@@ -23,7 +23,7 @@ class RouteInfo {
     final km = distanceMeters / 1000;
     return '${km.toStringAsFixed(km < 10 ? 1 : 0)} km';
   }
-
+ 
   String get durationText {
     final totalMinutes = (durationSeconds / 60).round();
     if (totalMinutes < 1) {
@@ -72,8 +72,8 @@ class RouteService {
 
           
           final double duration = switch (profile) {
-            'walking' => distance / 1.35, // ~4.8 km/
-            'cycling' => distance / 4.16, // ~15 km/
+            'walking' => distance / 1.35, // ~4.8 km
+            'cycling' => distance / 4.16, // ~15 km
             _ => rawDuration,
           };
 

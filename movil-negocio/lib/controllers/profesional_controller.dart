@@ -65,4 +65,35 @@ class ProfesionalController extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> updateProfessional(
+    int shopId,
+    int professionalId,
+    ProfessionalUpdateRequest request,
+  ) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final updated = await _service.editProfessional(
+        shopId,
+        professionalId,
+        request,
+      );
+      final idx = _professionals
+          .indexWhere((p) => p.idProfesional == professionalId);
+      if (idx >= 0) {
+        _professionals[idx] = updated;
+      } else {
+        _professionals.add(updated);
+      }
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }

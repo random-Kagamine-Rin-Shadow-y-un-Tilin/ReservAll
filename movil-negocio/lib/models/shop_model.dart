@@ -1,3 +1,5 @@
+import 'address_model.dart';
+
 class Shop {
   final int? id;
   final String nombre;
@@ -32,7 +34,9 @@ class Shop {
           ? json['id_categoria']
           : int.tryParse(json['id_categoria']?.toString() ?? ''),
       duenoId: json['dueno_id'],
-      estadoNegocio: json['estado_negocio'] ?? true,
+      estadoNegocio: json['estado_negocio'] is bool
+          ? json['estado_negocio'] as bool
+          : null,
       fechaCreacion: json['fecha_creacion'],
     );
 
@@ -194,11 +198,13 @@ class ShopFullProfile {
   final Shop general;
   final List<ShopContact> contacts;
   final List<ShopSchedule> schedules;
+  final ShopAddress? direccion;
 
   ShopFullProfile({
     required this.general,
     this.contacts = const [],
     this.schedules = const [],
+    this.direccion,
   });
 
   factory ShopFullProfile.fromJson(Map<String, dynamic> json) {
@@ -214,6 +220,9 @@ class ShopFullProfile {
               ?.map((e) => ShopSchedule.fromJson(e))
               .toList() ??
           [],
+      direccion: json['direccion'] is Map<String, dynamic>
+          ? ShopAddress.fromJson(json['direccion'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

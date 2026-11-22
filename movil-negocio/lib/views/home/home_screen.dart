@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../config/app_colors.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/shop_controller.dart';
 import '../auth/login_screen.dart';
+import '../reservas/reservas_list_screen.dart';
 import '../shop/register_shop_screen.dart';
 import '../shop/shop_detail_screen.dart';
 
@@ -748,6 +750,52 @@ class ReservationsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shopController = context.watch<ShopController>();
+    final shops = shopController.myShops;
+
+    if (shopController.isLoading && shops.isEmpty) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (shops.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Reservas'),
+          backgroundColor: Theme.of(context).primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 2,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.event_available, size: 80, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text(
+                'Aún no tienes negocios',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Registra un negocio para ver sus reservas',
+                style: TextStyle(color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (shops.length == 1) {
+      return ReservasListScreen(negocioId: shops.first.id!);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reservas'),
@@ -755,27 +803,38 @@ class ReservationsTab extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 2,
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.event_available, size: 80, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              'Módulo de Reservas',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade600,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Elige un negocio',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...shops.map(
+            (shop) => Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.store,
+                  color: AppColors.primary,
+                ),
+                title: Text(shop.nombre),
+                subtitle: Text(shop.descripcion, maxLines: 1),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ReservasListScreen(negocioId: shop.id!),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Próximamente disponible',
-              style: TextStyle(color: Colors.grey.shade500),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

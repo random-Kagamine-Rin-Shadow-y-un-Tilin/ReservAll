@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/address_model.dart';
 import '../models/shop_model.dart';
 import '../services/shop_service.dart';
 import 'dart:io';
@@ -188,6 +189,14 @@ class ShopController extends ChangeNotifier {
 
   ShopFullProfile? get fullProfile => _fullProfile;
 
+  ShopAddress? _address;
+  ShopAddress? get address => _address;
+
+  Set<int>? _publicShopIds;
+
+  /// IDs de negocios visibles públicamente. `null` si no se pudo consultar.
+  Set<int>? get publicShopIds => _publicShopIds;
+
   Future<bool> getShopById(int shopId) async {
     _isLoading = true;
     _errorMessage = null;
@@ -196,6 +205,7 @@ class ShopController extends ChangeNotifier {
     try {
       _fullProfile = await _shopService.getShopFullProfile(shopId);
       _currentShop = _fullProfile!.general;
+      _address = _fullProfile!.direccion;
       _isLoading = false;
       notifyListeners();
       return true;
@@ -336,6 +346,124 @@ class ShopController extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // ==================== HORARIOS ====================
+
+  /// POST /shop/register-schedule/{shopId}
+  Future<bool> registerSchedule(
+    int shopId, {
+    required String dia,
+    required String horaApertura,
+    required String horaCierre,
+    String? horaDescanso,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _shopService.registerSchedule(
+        shopId,
+        dia: dia,
+        horaApertura: horaApertura,
+        horaCierre: horaCierre,
+        horaDescanso: horaDescanso,
+      );
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ==================== DIRECCIÓN ====================
+
+  /// GET /shop/get-address/{shopId}
+  Future<bool> loadAddress(int shopId) async {
+    _errorMessage = null;
+    try {
+      _address = await _shopService.getAddress(shopId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// POST /shop/register-address/{shopId}
+  Future<bool> registerAddress(
+    int shopId,
+    ShopAddressCreateRequest request,
+  ) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      _address = await _shopService.registerAddress(shopId, request);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// PUT /shop/edit-address/{shopId}
+  Future<bool> editAddress(
+    int shopId,
+    ShopAddressUpdateRequest request,
+  ) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      _address = await _shopService.editAddress(shopId, request);
+      if (_currentShop?.id == shopId) {
+        await getShopById(shopId);
+      }
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ==================== VISIBILIDAD ====================
+
+  /// GET /client/list-shops
+  Future<void> loadPublicShopIds() async {
+    try {
+      final ids = await _shopService.getPublicShopIds();
+      _publicShopIds = ids.toSet();
+    } catch (_) {
+      _publicShopIds = null;
+    }
+    notifyListeners();
+  }
+
+  bool? isShopPublic(int shopId) {
+    final ids = _publicShopIds;
+    if (ids == null) return null;
+    return ids.contains(shopId);
   }
 
   // Limpiar datos

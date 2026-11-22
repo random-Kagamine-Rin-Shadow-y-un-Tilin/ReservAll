@@ -30,8 +30,17 @@ class ReservaController extends ChangeNotifier {
   int? _filtroProfesionalId;
   int? get filtroProfesionalId => _filtroProfesionalId;
 
+  String? _filtroSearch;
+  String? get filtroSearch => _filtroSearch;
+
+  bool _historial = false;
+  bool get historial => _historial;
+
   bool get hayFiltrosActivos =>
-      _filtroEstado != null || _filtroFecha != null || _filtroProfesionalId != null;
+      _filtroEstado != null ||
+      _filtroFecha != null ||
+      _filtroProfesionalId != null ||
+      (_filtroSearch != null && _filtroSearch!.isNotEmpty);
 
   // ---- Profesionales del negocio ----
   final List<ProfesionalItem> _profesionales = [];
@@ -60,14 +69,26 @@ class ReservaController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final res = await _service.listarPorNegocio(
-        negocioId: negocioId,
-        estado: _filtroEstado,
-        fecha: _filtroFecha,
-        profesionalId: _filtroProfesionalId,
-        limit: _pageSize,
-        offset: _page * _pageSize,
-      );
+      final res = _historial
+          ? await _service.historial(
+              negocioId: negocioId,
+              estado: _filtroEstado,
+              fechaDesde: _filtroFecha,
+              fechaHasta: _filtroFecha,
+              profesionalId: _filtroProfesionalId,
+              search: _filtroSearch,
+              limit: _pageSize,
+              offset: _page * _pageSize,
+            )
+          : await _service.listarPorNegocio(
+              negocioId: negocioId,
+              estado: _filtroEstado,
+              fecha: _filtroFecha,
+              profesionalId: _filtroProfesionalId,
+              search: _filtroSearch,
+              limit: _pageSize,
+              offset: _page * _pageSize,
+            );
       _total = res.total;
       _items = reset ? res.items : [..._items, ...res.items];
     } catch (e) {
@@ -96,6 +117,29 @@ class ReservaController extends ChangeNotifier {
 
   void setFiltroProfesional(int? id) {
     _filtroProfesionalId = id;
+    notifyListeners();
+  }
+
+  void setFiltroSearch(String? search) {
+    final value = (search ?? '').trim();
+    _filtroSearch = value.isEmpty ? null : value;
+    notifyListeners();
+  }
+
+  void setHistorial(bool value) {
+    if (_historial == value) return;
+    _historial = value;
+    _items = [];
+    _total = 0;
+    _page = 0;
+    notifyListeners();
+  }
+
+  void limpiarFiltros() {
+    _filtroEstado = null;
+    _filtroFecha = null;
+    _filtroProfesionalId = null;
+    _filtroSearch = null;
     notifyListeners();
   }
 
@@ -180,6 +224,97 @@ class ReservaController extends ChangeNotifier {
       if (idx >= 0 && previo != null) {
         _items[idx] = previo;
       }
+      _errorMessage = _msg(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _accionEnCursoId = null;
+      notifyListeners();
+    }
+  }
+
+  // ================= COMPLETAR =================
+  Future<bool> completar(int negocioId, int idReserva) async {
+    _accionEnCursoId = idReserva;
+    _errorMessage = null;
+    notifyListeners();
+
+    final idx = _items.indexWhere((r) => r.idReserva == idReserva);
+    final previo = idx >= 0 ? _items[idx] : null;
+    if (idx >= 0) {
+      _items[idx] = _items[idx].copyWith(estado: EstadoReserva.completada);
+      notifyListeners();
+    }
+
+    try {
+      await _service.completar(negocioId, idReserva);
+      await cargar(negocioId: negocioId, reset: true);
+      return true;
+    } catch (e) {
+      if (idx >= 0 && previo != null) {
+        _items[idx] = previo;
+      }
+      _errorMessage = _msg(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _accionEnCursoId = null;
+      notifyListeners();
+    }
+  }
+
+  // ================= CAMBIO DE ESTADO =================
+  Future<bool> actualizarEstado(
+    int negocioId,
+    int idReserva,
+    EstadoReserva estado, {
+    String? motivo,
+  }) async {
+    _accionEnCursoId = idReserva;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _service.actualizarEstado(
+        negocioId,
+        idReserva,
+        estado,
+        motivo: motivo,
+      );
+      await cargar(negocioId: negocioId, reset: true);
+      return true;
+    } catch (e) {
+      _errorMessage = _msg(e);
+      notifyListeners();
+      return false;
+    } finally {
+      _accionEnCursoId = null;
+      notifyListeners();
+    }
+  }
+
+  // ================= ASIGNAR PROFESIONAL =================
+  Future<bool> actualizarProfesional(
+    int negocioId,
+    int idReserva,
+    int? profesionalId,
+  ) async {
+    _accionEnCursoId = idReserva;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _service.actualizarProfesional(
+        negocioId,
+        idReserva,
+        profesionalId,
+      );
+      await cargar(negocioId: negocioId, reset: true);
+      if (_detalle?.idReserva == idReserva) {
+        await cargarDetalle(negocioId, idReserva);
+      }
+      return true;
+    } catch (e) {
       _errorMessage = _msg(e);
       notifyListeners();
       return false;

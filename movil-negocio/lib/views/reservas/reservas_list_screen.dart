@@ -125,7 +125,10 @@ class _ReservasListScreenState extends State<ReservasListScreen> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ReservaDetailScreen(idReserva: r.idReserva),
+              builder: (_) => ReservaDetailScreen(
+                    negocioId: widget.negocioId,
+                    idReserva: r.idReserva,
+                  ),
             ),
           ),
           // Sin onConfirmar/onRechazar → solo lectura

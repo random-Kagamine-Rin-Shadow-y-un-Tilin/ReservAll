@@ -175,7 +175,31 @@ class ShopService {
         if (response.data is! Map<String, dynamic>) {
           throw Exception('Formato de respuesta inválido');
         }
-        return ShopFullProfile.fromJson(response.data as Map<String, dynamic>);
+        final profile = ShopFullProfile.fromJson(response.data as Map<String, dynamic>);
+
+        // El perfil completo del backend no incluye id_social. Se obtienen los
+        // contactos desde el endpoint dedicado para poder editarlos/borrarlos.
+        try {
+          final contactsResponse = await _apiService.get(
+            '/shop/get-contacts/$shopId',
+            requiresAuth: true,
+          );
+          final contactsData = contactsResponse.data;
+          if (contactsData is List) {
+            return ShopFullProfile(
+              general: profile.general,
+              contacts: contactsData
+                  .whereType<Map<String, dynamic>>()
+                  .map(ShopContact.fromJson)
+                  .toList(),
+              schedules: profile.schedules,
+            );
+          }
+        } catch (_) {
+          // Si falla, se conservan los contactos del perfil completo.
+        }
+
+        return profile;
       } else {
         final errorData = response.data as Map<String, dynamic>?;
         throw Exception(errorData?['detail'] ?? 'Error al obtener el negocio');

@@ -131,7 +131,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             ),
                           );
                           if (result == true) {
-                            if (!context.mounted) return;
                             context.read<ServiceController>().loadServices(widget.shopId);
                           }
                         },
@@ -172,7 +171,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
             MaterialPageRoute(builder: (_) => AddServiceScreen(shopId: widget.shopId)),
           );
           if (result == true) {
-            if (!context.mounted) return;
             context.read<ServiceController>().loadServices(widget.shopId);
           }
         },

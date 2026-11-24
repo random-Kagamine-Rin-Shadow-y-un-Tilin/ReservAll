@@ -7,7 +7,6 @@ import 'screens/business/business_detail_screen.dart';
 import 'screens/booking/booking_screen.dart';
 import 'screens/booking/booking_create_screen.dart';
 import 'screens/booking/booking_list_screen.dart';
-import 'screens/booking/booking_detail_screen.dart';
 import 'screens/favorites/favorites_screen.dart';
 
 void main() {
@@ -32,7 +31,6 @@ class MyApp extends StatelessWidget {
         '/booking': (context) => BookingScreen(),
         '/bookingCreate': (context) => const BookingCreateScreen(),
         '/bookings': (context) => BookingListScreen(),
-        '/bookingDetail': (context) => const BookingDetailScreen(),
       },
     );
   }

@@ -2,15 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../controllers/shop_controller.dart';
-import '../../models/address_model.dart';
 import '../../models/shop_model.dart';
 import '../widgets/loading_widget.dart';
-import '../agenda/agenda_screen.dart';
-import '../clientes/clients_screen.dart';
-import '../reportes/reports_screen.dart';
-import '../reservas/reservas_list_screen.dart';
-import 'add_schedule_screen.dart';
-import 'address_form_screen.dart';
 import 'edit_contact_screen.dart';
 import 'edit_schedule_screen.dart';
 import 'edit_shop_screen.dart';
@@ -32,9 +25,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctrl = context.read<ShopController>();
-      ctrl.getShopById(widget.shopId);
-      ctrl.loadPublicShopIds();
+      context.read<ShopController>().getShopById(widget.shopId);
     });
   }
 
@@ -169,10 +160,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // ---------- Dirección ----------
-                  _buildAddressCard(profile?.direccion),
-                  const SizedBox(height: 24),
-
                   // ---------- Accesos Rápidos (Nuevos Módulos) ----------
                   const Text(
                     'Gestión del Negocio',
@@ -210,75 +197,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                             MaterialPageRoute(
                               builder: (_) =>
                                   ServicesScreen(shopId: widget.shopId),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMenuCard(
-                          icon: Icons.calendar_month,
-                          title: 'Agenda',
-                          color: Colors.teal,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  AgendaScreen(shopId: widget.shopId),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildMenuCard(
-                          icon: Icons.people_alt,
-                          title: 'Clientes',
-                          color: Colors.orange,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  ClientsScreen(shopId: widget.shopId),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMenuCard(
-                          icon: Icons.bar_chart,
-                          title: 'Reportes',
-                          color: Colors.indigo,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  ReportsScreen(shopId: widget.shopId),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildMenuCard(
-                          icon: Icons.event_available,
-                          title: 'Reservas',
-                          color: Colors.deepOrange,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ReservasListScreen(
-                                negocioId: widget.shopId,
-                              ),
                             ),
                           ),
                         ),
@@ -550,54 +468,8 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
     );
   }
 
-  Widget _buildAddressCard(ShopAddress? address) {
-    final resumen = (address?.resumen ?? '').trim();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, color: AppColors.primary),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Dirección',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => _openAddress(address),
-                  icon: Icon(address == null ? Icons.add : Icons.edit, size: 18),
-                  label: Text(address == null ? 'Registrar' : 'Editar'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              resumen.isEmpty ? 'Sin dirección registrada' : resumen,
-              style: TextStyle(
-                fontSize: 14,
-                color: resumen.isEmpty
-                    ? AppColors.textSecondary
-                    : AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatusCard(Shop shop) {
-    final publico = context.watch<ShopController>().isShopPublic(widget.shopId);
-    final isActive = shop.estadoNegocio ?? publico ?? false;
+    final isActive = shop.estadoNegocio ?? false;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -707,7 +579,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       'Se eliminará "${contact.nombreRed}".',
     );
     if (ok != true) return;
-    if (!mounted) return;
 
     final controller = context.read<ShopController>();
     final success = await controller.deleteContact(
@@ -725,26 +596,15 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   }
 
   Future<void> _openAddSchedule() async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddScheduleScreen(shopId: widget.shopId),
-      ),
-    );
-    if (result == true) {
-      await _reload();
-    }
-  }
-
-  Future<void> _openAddress(ShopAddress? address) async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            AddressFormScreen(shopId: widget.shopId, address: address),
-      ),
-    );
-    if (result == true) await _reload();
+    // final result = await Navigator.push<bool>(
+    //   context,
+    //   MaterialPageRoute(
+    //     builder: (_) => AddScheduleScreen(shopId: widget.shopId),
+    //   ),
+    // );
+    // if (result == true) {
+    //   await _reload();
+    // }
   }
 
   Future<void> _openEditSchedule(ShopSchedule schedule) async {
@@ -764,7 +624,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       'Se eliminará el horario del ${schedule.dia}.',
     );
     if (ok != true) return;
-    if (!mounted) return;
 
     final controller = context.read<ShopController>();
     final success = await controller.deleteSchedule(
@@ -788,8 +647,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
     if (!mounted) return;
 
     if (success) {
-      await controller.loadPublicShopIds();
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -814,7 +671,6 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       'El negocio será desactivado y los clientes no podrán verlo.',
     );
     if (ok != true) return;
-    if (!mounted) return;
 
     final controller = context.read<ShopController>();
     final success = await controller.deleteShop(shopId);

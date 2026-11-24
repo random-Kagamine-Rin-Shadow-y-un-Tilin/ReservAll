@@ -60,7 +60,7 @@ class AuthController extends ChangeNotifier {
         correo: correo.trim(),
         password: password,
         confirmPassword: confirmPassword,
-        rol: 'negocio',
+        rol: 'dueno_negocio',
       );
 
       final user = await _authService.register(registerRequest);

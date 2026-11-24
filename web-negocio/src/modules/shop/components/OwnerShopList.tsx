@@ -34,7 +34,7 @@ export function OwnerShopList(){
             <div className="flex flex-col gap-3 justify-between h-full">
                 <div className="flex flex-col gap-2">
                     <span className="text-4xl">Sin negocios registrados</span>
-                    <Link to="/negocio/registrar"
+                    <Link to="/shop/register"
                     className="px-3 py-2 bg-primary rounded-md w-max 
                     text-card hover:bg-primary/90"
                     >
@@ -86,7 +86,7 @@ export function OwnerShopList(){
                             {shop.descripcion}
                         </span>
                     </div>
-                    <Link to="/negocio" className="flex justify-end items-center gap-2 text-primary">
+                    <Link to={`/shop/${shop.id}`} className="flex justify-end items-center gap-2 text-primary">
                     Ver detalles
                     <GoArrowRight/>
                     </Link>

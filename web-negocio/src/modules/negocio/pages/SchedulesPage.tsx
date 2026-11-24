@@ -38,7 +38,6 @@ export function SchedulesPage() {
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Schedule | null>(null);
-  const [creatingDay, setCreatingDay] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Schedule | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -77,9 +76,8 @@ export function SchedulesPage() {
     setReloadKey((key) => key + 1);
   }
 
-  function openCreate(day?: string) {
+  function openCreate() {
     setEditing(null);
-    setCreatingDay(day ?? null);
     setModalOpen(true);
   }
 
@@ -136,7 +134,7 @@ export function SchedulesPage() {
         actions={
           <Button
             leftIcon={<LuPlus size={16} />}
-            onClick={() => openCreate()}
+            onClick={openCreate}
             disabled={schedule.length >= 7}
           >
             Añadir horario
@@ -180,7 +178,7 @@ export function SchedulesPage() {
                 <Button
                   size="sm"
                   leftIcon={<LuPlus size={15} />}
-                  onClick={() => openCreate()}
+                  onClick={openCreate}
                 >
                   Configurar horario
                 </Button>
@@ -281,7 +279,7 @@ export function SchedulesPage() {
                         size="sm"
                         className="mt-4 w-full"
                         leftIcon={<LuPlus size={14} />}
-                        onClick={() => openCreate(day.value)}
+                        onClick={openCreate}
                       >
                         Configurar {day.label}
                       </Button>
@@ -300,7 +298,6 @@ export function SchedulesPage() {
           onClose={() => setModalOpen(false)}
           shopId={selectedShopId}
           schedule={editing}
-          initialDay={creatingDay}
           existingDays={existingDays}
           onSaved={reload}
         />

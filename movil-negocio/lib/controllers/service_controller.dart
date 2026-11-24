@@ -79,6 +79,9 @@ class ServiceController extends ChangeNotifier {
   
   Future<bool> toggleServiceStatus(int shopId, int serviceId, bool nuevoEstado) async {
     final index = _services.indexWhere((s) => s.idServicio == serviceId);
+    if (index != -1) {
+      final s = _services[index];
+    }
 
     try {
       // Usamos el mismo endpoint de edición, pero solo enviamos el estado

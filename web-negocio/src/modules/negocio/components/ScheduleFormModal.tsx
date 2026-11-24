@@ -12,7 +12,6 @@ interface ScheduleFormModalProps {
   onClose: () => void;
   shopId: number;
   schedule?: Schedule | null;
-  initialDay?: string | null;
   existingDays: string[];
   onSaved: () => Promise<void> | void;
 }
@@ -22,7 +21,6 @@ export function ScheduleFormModal({
   onClose,
   shopId,
   schedule,
-  initialDay,
   existingDays,
   onSaved,
 }: ScheduleFormModalProps) {
@@ -38,13 +36,13 @@ export function ScheduleFormModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setDia(schedule?.dia ?? initialDay ?? availableDays[0]?.value ?? "");
+    setDia(schedule?.dia ?? availableDays[0]?.value ?? "");
     setApertura(schedule ? formatTime(schedule.hora_apertura) : "09:00");
     setCierre(schedule ? formatTime(schedule.hora_cierre) : "18:00");
     setDescanso(schedule?.hora_descanso ? formatTime(schedule.hora_descanso) : "");
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, schedule, initialDay]);
+  }, [isOpen, schedule]);
 
   async function handleSubmit() {
     setError(null);

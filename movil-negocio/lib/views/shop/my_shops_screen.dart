@@ -20,27 +20,16 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _recargar(context.read<ShopController>());
+      context.read<ShopController>().getMyShops();
     });
   }
 
-  Future<void> _recargar(ShopController ctrl) async {
-    await ctrl.getMyShops();
-    await ctrl.loadPublicShopIds();
-  }
-
-  /// `/shop/my-shops` no expone `estado_negocio`; se deduce del listado público
-  /// de negocios activos (mismo criterio que la web).
-  bool _isActive(ShopController ctrl, Shop shop) {
-    return shop.estadoNegocio ?? ctrl.isShopPublic(shop.id ?? -1) ?? true;
-  }
-
-  List<Shop> _applyFilter(List<Shop> shops, ShopController ctrl) {
+  List<Shop> _applyFilter(List<Shop> shops) {
     switch (_filter) {
       case 'active':
-        return shops.where((s) => _isActive(ctrl, s)).toList();
+        return shops.where((s) => s.estadoNegocio == true).toList();
       case 'inactive':
-        return shops.where((s) => !_isActive(ctrl, s)).toList();
+        return shops.where((s) => s.estadoNegocio != true).toList();
       default:
         return shops;
     }
@@ -56,7 +45,9 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => _recargar(context.read<ShopController>()),
+            onPressed: () {
+              context.read<ShopController>().getMyShops();
+            },
           ),
         ],
       ),
@@ -74,14 +65,14 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
             return _buildEmptyState();
           }
 
-          final filtered = _applyFilter(shopController.myShops, shopController);
+          final filtered = _applyFilter(shopController.myShops);
 
           return Column(
             children: [
-              _buildFilterChips(shopController.myShops, shopController),
+              _buildFilterChips(shopController.myShops),
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: () => _recargar(shopController),
+                  onRefresh: () => shopController.getMyShops(),
                   child: filtered.isEmpty
                       ? _buildFilterEmptyState()
                       : ListView.builder(
@@ -91,7 +82,6 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
                             return _buildShopCard(
                               context,
                               filtered[index],
-                              shopController,
                             );
                           },
                         ),
@@ -109,8 +99,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
               builder: (_) => const RegisterShopScreen(),
             ),
           ).then((_) {
-            if (!context.mounted) return;
-            _recargar(context.read<ShopController>());
+            context.read<ShopController>().getMyShops();
           });
         },
         backgroundColor: AppColors.primary,
@@ -143,7 +132,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => _recargar(controller),
+              onPressed: () => controller.getMyShops(),
               child: const Text('Reintentar'),
             ),
           ],
@@ -187,8 +176,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
                     builder: (_) => const RegisterShopScreen(),
                   ),
                 ).then((_) {
-                  if (!mounted) return;
-                  _recargar(context.read<ShopController>());
+                  context.read<ShopController>().getMyShops();
                 });
               },
               icon: const Icon(Icons.add_business),
@@ -233,9 +221,9 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
 
   // ============ FILTROS ============
 
-  Widget _buildFilterChips(List<Shop> shops, ShopController ctrl) {
+  Widget _buildFilterChips(List<Shop> shops) {
     final total = shops.length;
-    final active = shops.where((s) => _isActive(ctrl, s)).length;
+    final active = shops.where((s) => s.estadoNegocio == true).length;
     final inactive = total - active;
 
     return Container(
@@ -272,12 +260,8 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
 
   // ============ TARJETA DE NEGOCIO ============
 
-  Widget _buildShopCard(
-    BuildContext context,
-    Shop shop,
-    ShopController ctrl,
-  ) {
-    final isActive = _isActive(ctrl, shop);
+  Widget _buildShopCard(BuildContext context, Shop shop) {
+    final isActive = shop.estadoNegocio ?? false;
 
     return Card(
       elevation: 2,
@@ -293,8 +277,7 @@ class _MyShopsScreenState extends State<MyShopsScreen> {
               builder: (_) => ShopDetailScreen(shopId: shop.id!),
             ),
           ).then((_) {
-            if (!context.mounted) return;
-            _recargar(context.read<ShopController>());
+            context.read<ShopController>().getMyShops();
           });
         },
         borderRadius: BorderRadius.circular(12),

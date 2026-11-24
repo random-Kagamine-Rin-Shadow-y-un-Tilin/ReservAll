@@ -19,7 +19,7 @@ export function ContactShopInfo({shop}: {shop: ShopContactInfo[]}){
             const data = await getContactsByShop(Number(shopId))
             setContacts(data)
         } catch(err){
-            console.error("No pudimos actualizar los contactos.", err)
+            console.error("Error")
         }
     }, [shopId])
 
@@ -28,8 +28,7 @@ export function ContactShopInfo({shop}: {shop: ShopContactInfo[]}){
         await updateContacts()
     }
 
-    const myContacts = contacts.map((c)=> c.nombre_red)
-    const shopIdNumber = Number(shopId)
+    const myContacts = shop.map((c)=> c.nombre_red)
 
     return(
         <>
@@ -62,11 +61,10 @@ export function ContactShopInfo({shop}: {shop: ShopContactInfo[]}){
                     </div>
                     <div className="grid grid-cols-2 gap-2 bg-card p-4 rounded-2xl shadow">
                         {contacts.map(s =>(
-                            <SocialComponent
-                            key={s.id_social ?? s.nombre_red}
+                            <SocialComponent 
                             shop={
                                 {
-                                    id_negocio: shopIdNumber,
+                                    id_negocio: 1, 
                                     nombre_red: s.nombre_red,
                                     url: s.url
                                 }}

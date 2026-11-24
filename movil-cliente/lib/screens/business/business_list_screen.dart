@@ -48,15 +48,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   final Color textMainColor = const Color(0xFF2B2118);
   final Color textSecondaryColor = const Color(0xFF7A7267);
 
-  static const Map<String, String> _sortOptions = {
-    "relevancia": "Relevancia",
-    "nombre": "Nombre (A-Z)",
-    "precio_asc": "Menor precio",
-    "precio_desc": "Mayor precio",
-    "distancia": "Más cercanos",
-    "populares": "Más populares",
-  };
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -242,7 +233,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
 
     try {
       var result = await searchCatalog(
-        q: query,
+        q: currentQuery,
         categoriaId: selectedCategoryId,
         categoria: selectedCategoryId == null && selectedCategory != "Todos"
             ? selectedCategory
@@ -373,12 +364,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       selectedCategory = name;
       selectedCategoryId = id;
     });
-    _loadShops();
-  }
-
-  void _changeSort(String? value) {
-    if (value == null) return;
-    setState(() => orden = value);
     _loadShops();
   }
 
@@ -812,6 +797,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
               controller: searchController,
               style: TextStyle(color: textMainColor),
               onChanged: _onSearchChanged,
+              onSubmitted: (_) => _loadShops(),
               decoration: InputDecoration(
                 hintText: "Buscar por nombre, servicio o categoría...",
                 hintStyle: TextStyle(color: textSecondaryColor),
@@ -822,15 +808,24 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-                suffixIcon: searchController.text.isNotEmpty
-                    ? IconButton(
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (searchController.text.isNotEmpty)
+                      IconButton(
                         icon: Icon(Icons.clear, color: textSecondaryColor),
                         onPressed: () {
                           searchController.clear();
                           _onSearchChanged("");
                         },
-                      )
-                    : null,
+                      ),
+                    IconButton(
+                      tooltip: "Buscar",
+                      icon: Icon(Icons.arrow_forward, color: secondaryColor),
+                      onPressed: _loadShops,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -934,12 +929,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   bool get _hasLocation => latitud != null && longitud != null;
 
   Widget _buildFilterBar() {
-    final sortEntries = _sortOptions.entries
-        .where((entry) => entry.key != "distancia" || _hasLocation)
-        .toList();
-    final sortValue = sortEntries.any((entry) => entry.key == orden)
-        ? orden
-        : "relevancia";
+    final hasPriceFilter = minPrecio != null || maxPrecio != null;
 
     return SizedBox(
       height: 44,
@@ -947,32 +937,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: sortValue,
-                icon: Icon(Icons.sort, color: primaryColor),
-                items: sortEntries
-                    .map(
-                      (entry) => DropdownMenuItem(
-                        value: entry.key,
-                        child: Text(
-                          entry.value,
-                          style: TextStyle(color: textMainColor, fontSize: 13),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: _changeSort,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
           _nearbyActionButton(),
           const SizedBox(width: 6),
           _filterButton(

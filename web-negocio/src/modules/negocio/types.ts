@@ -48,6 +48,7 @@ export interface Schedule {
   hora_apertura: string;
   hora_cierre: string;
   hora_descanso: string | null;
+  descanso_duracion_min?: number;
   estado_horario?: boolean | null;
 }
 
@@ -56,11 +57,11 @@ export interface SchedulePayload {
   hora_apertura: string;
   hora_cierre: string;
   hora_descanso?: string | null;
+  descanso_duracion_min?: number;
+  estado_horario?: boolean;
 }
 
-export type ScheduleEditPayload = Omit<SchedulePayload, "dia"> & {
-  estado_horario?: boolean;
-};
+export type ScheduleEditPayload = Omit<SchedulePayload, "dia">;
 
 export interface ApiMessage {
   message: string;

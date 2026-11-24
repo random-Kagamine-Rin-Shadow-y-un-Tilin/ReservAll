@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   LuLogOut,
   LuMail,
-  LuSparkles,
+  LuPencil,
   LuStore,
   LuUser,
 } from "react-icons/lu";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { useShop } from "../../shop/hooks/useShop";
+import { ProfileEditModal } from "../../auth/components/ProfileEditModal";
 import { Badge } from "../../../shared/components/ui/Badge";
 import { Button } from "../../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../../shared/components/ui/Card";
@@ -17,6 +19,8 @@ export function AccountPage() {
   const { user, logout } = useAuth();
   const { shops, selectedShop, loading: shopLoading } = useShop();
   const navigate = useNavigate();
+  const [editOpen, setEditOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   async function handleLogout() {
     await logout();
@@ -77,15 +81,23 @@ export function AccountPage() {
               </div>
             </div>
 
-            <div className="flex items-start gap-2.5 rounded-xl border border-highlight/20 bg-highlight-tint/50 px-4 py-3">
-              <LuSparkles size={16} className="mt-0.5 shrink-0 text-highlight" />
-              <p className="text-xs leading-relaxed text-secondary-text">
-                La edición de datos personales y el cambio de contraseña estarán
-                disponibles en una siguiente fase.
-              </p>
-            </div>
+            {saved && (
+              <div className="rounded-xl border border-success/20 bg-success-tint px-4 py-3 text-xs font-medium text-success">
+                Tus datos se actualizaron correctamente.
+              </div>
+            )}
 
             <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                leftIcon={<LuPencil size={15} />}
+                onClick={() => {
+                  setSaved(false);
+                  setEditOpen(true);
+                }}
+              >
+                Editar mis datos
+              </Button>
               <Button
                 variant="outline"
                 leftIcon={<LuLogOut size={15} />}
@@ -153,6 +165,15 @@ export function AccountPage() {
           </div>
         </Card>
       </div>
+
+      {user && (
+        <ProfileEditModal
+          isOpen={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => setSaved(true)}
+          user={user}
+        />
+      )}
     </div>
   );
 }

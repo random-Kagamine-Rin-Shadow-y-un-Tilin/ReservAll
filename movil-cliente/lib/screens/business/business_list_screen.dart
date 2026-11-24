@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '/models/shop.dart';
+import '/screens/business/business_map_screen.dart';
 import '/services/api_service.dart';
 import '/services/location_service.dart';
+import '/services/service_description_helper.dart';
 
 class BusinessListScreen extends StatefulWidget {
   final String? category;
@@ -17,6 +19,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25];
 
   List<Shop> shops = [];
+  List<Map<String, dynamic>> matchedServices = [];
   List<ShopCategory> categories = [];
   bool isLoading = false;
   String? errorMessage;
@@ -101,13 +104,140 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     } catch (_) {}
   }
 
+  bool _isServiceActive(Map<String, dynamic> servicioMap) {
+    final rawActive = servicioMap['estado_servicio'] ??
+        servicioMap['activo'] ??
+        servicioMap['is_active'] ??
+        servicioMap['disponible'];
+
+    if (rawActive == null) {
+      final estadoStr =
+          (servicioMap['estado'] ?? '').toString().trim().toLowerCase();
+      if (estadoStr == 'inactivo' ||
+          estadoStr == 'inactive' ||
+          estadoStr == 'desactivado') {
+        return false;
+      }
+      return true;
+    }
+
+    if (rawActive is bool) return rawActive;
+    if (rawActive is num) return rawActive != 0;
+
+    final normalized = rawActive.toString().trim().toLowerCase();
+    return normalized != 'false' &&
+        normalized != '0' &&
+        normalized != 'inactivo' &&
+        normalized != 'inactive' &&
+        normalized != 'no';
+  }
+
+  String? _buildAddressFromDetail(ShopDetail shopDetail, Shop fallbackShop) {
+    final address = shopDetail.direccion;
+    if (address == null) {
+      final raw = fallbackShop.direccion?.trim() ?? '';
+      return raw.isEmpty ? null : raw;
+    }
+
+    final street = [
+      address['direccion_calle'],
+      address['numero_local'],
+      address['numero_interior'],
+    ]
+        .where((v) => v != null && v.toString().trim().isNotEmpty)
+        .join(' ');
+    final city = address['ciudad']?.toString().trim();
+    final state = address['estado']?.toString().trim();
+
+    final parts = <String>[];
+    if (street.isNotEmpty) parts.add(street);
+    if (city != null && city.isNotEmpty) parts.add(city);
+    if (state != null && state.isNotEmpty) parts.add(state);
+
+    if (parts.isNotEmpty) return parts.join(', ');
+    final raw = fallbackShop.direccion?.trim() ?? '';
+    return raw.isEmpty ? null : raw;
+  }
+
+  Future<List<Map<String, dynamic>>> _searchMatchingActiveServices(
+    List<Shop> candidateShops,
+    String searchTerm,
+    int requestId,
+  ) async {
+    final term = searchTerm.trim().toLowerCase();
+    if (term.isEmpty || candidateShops.isEmpty) return const [];
+
+    final targets = candidateShops.take(15).toList();
+    final results = <Map<String, dynamic>>[];
+
+    await Future.wait(
+      targets.map((shop) async {
+        try {
+          final shopDetail = await fetchShopDetail(shop.id);
+          if (!mounted || requestId != _requestId) return;
+
+          final resolvedShop = shopDetail.resolvedShop.copyWith(
+            distanciaKm:
+                shopDetail.resolvedShop.distanciaKm ?? shop.distanciaKm,
+          );
+          final formattedAddress =
+              _buildAddressFromDetail(shopDetail, resolvedShop);
+
+          for (final rawSvc in shopDetail.servicios) {
+            if (rawSvc is! Map) continue;
+            final svcMap = Map<String, dynamic>.from(rawSvc);
+            if (!_isServiceActive(svcMap)) continue;
+
+            final int sId = int.tryParse(
+                  (svcMap['id_servicio'] ?? svcMap['id'] ?? 0).toString(),
+                ) ??
+                0;
+            final String sName =
+                (svcMap['nombre'] ?? svcMap['name'] ?? 'Servicio').toString();
+            final String sDesc = ServiceDescriptionHelper.resolve(
+              raw: svcMap,
+              serviceId: sId > 0 ? sId : null,
+              serviceName: sName,
+            );
+
+            if (sName.toLowerCase().contains(term) ||
+                sDesc.toLowerCase().contains(term)) {
+              results.add({
+                'shop': resolvedShop,
+                'formattedAddress': formattedAddress,
+                'serviceId': sId,
+                'serviceName': sName,
+                'serviceDescription': sDesc,
+                'duration': svcMap['duracion_minutos'],
+                'price': svcMap['precio'],
+                'image': _getImageUrl(
+                  svcMap['imagen'] ??
+                      svcMap['imagen_url'] ??
+                      svcMap['imagenServicio'] ??
+                      svcMap['foto'] ??
+                      resolvedShop.imagenNegocio,
+                ),
+              });
+            }
+          }
+        } catch (_) {}
+      }),
+    );
+
+    return results;
+  }
+
   Future<void> _loadShops() async {
     if (!mounted) return;
     final requestId = ++_requestId;
+    final currentQuery = query.trim();
 
     setState(() {
       isLoading = true;
       errorMessage = null;
+      if (currentQuery.isEmpty) {
+        matchedServices = [];
+      }
     });
 
     try {
@@ -138,15 +268,45 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         }
       }
 
+      List<Map<String, dynamic>> foundServices = const [];
+      if (currentQuery.isNotEmpty) {
+        var pool = result;
+        if (pool.isEmpty) {
+          pool = await searchCatalog(
+            q: "",
+            categoriaId: selectedCategoryId,
+            categoria: selectedCategoryId == null && selectedCategory != "Todos"
+                ? selectedCategory
+                : null,
+            ciudad: ciudad.isEmpty ? null : ciudad,
+            lat: latitud,
+            lng: longitud,
+            radioKm: _hasLocation ? radioKm : null,
+            fecha: disponibleFecha == null
+                ? null
+                : _formatDate(disponibleFecha!),
+            hora: disponibleHora == null ? null : _formatTime(disponibleHora!),
+            orden: orden,
+          );
+        }
+        foundServices = await _searchMatchingActiveServices(
+          pool,
+          currentQuery,
+          requestId,
+        );
+      }
+
       if (!mounted || requestId != _requestId) return;
       setState(() {
         shops = result;
+        matchedServices = foundServices;
         isLoading = false;
       });
     } catch (e) {
       if (!mounted || requestId != _requestId) return;
       setState(() {
         shops = [];
+        matchedServices = [];
         isLoading = false;
         errorMessage = "No se pudieron cargar los negocios. Intenta de nuevo.";
       });
@@ -225,40 +385,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   void _selectRadius(double radius) {
     if (radioKm == radius) return;
     setState(() => radioKm = radius);
-    _loadShops();
-  }
-
-  Future<void> _openCityFilter() async {
-    final controller = TextEditingController(text: ciudad);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Filtrar por ubicación"),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: "Ciudad",
-            hintText: "Ej. Huamantla",
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text("Aplicar"),
-          ),
-        ],
-      ),
-    );
-
-    controller.dispose();
-    if (result == null) return;
-    setState(() => ciudad = result.trim());
     _loadShops();
   }
 
@@ -357,6 +483,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       latitud = null;
       longitud = null;
       radioKm = 5;
+      matchedServices = [];
     });
     _loadShops();
   }
@@ -396,6 +523,13 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     return "Desde \$${value.toStringAsFixed(0)}";
   }
 
+  String _singlePriceLabel(dynamic rawPrice) {
+    if (rawPrice == null) return "Precio no disponible";
+    final value = double.tryParse(rawPrice.toString());
+    if (value == null) return "\$$rawPrice";
+    return "\$${value.toStringAsFixed(2)}";
+  }
+
   String _distanceLabel(Shop shop) {
     final dist = shop.distanciaKm;
     if (dist == null) return "";
@@ -403,6 +537,248 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       return "${(dist * 1000).round()} m";
     }
     return "${dist.toStringAsFixed(1)} km";
+  }
+
+  void _openServiceDetailsModal(Map<String, dynamic> item) {
+    final Shop shop = item['shop'] as Shop;
+    final String? formattedAddress = item['formattedAddress'] as String?;
+    final String sName = item['serviceName'] as String;
+    final String sDesc = item['serviceDescription'] as String;
+    final dynamic duration = item['duration'];
+    final String priceText = _singlePriceLabel(item['price']);
+    final String imgUrl = (item['image'] as String?) ?? '';
+    final String addressDisplay = formattedAddress ??
+        shop.direccion ??
+        shop.ciudad ??
+        "Ubicación no registrada";
+    final bool canShowRoute = shop.hasCoordinates;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              18,
+              20,
+              20 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: imgUrl.isNotEmpty
+                          ? Image.network(
+                              imgUrl,
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  _serviceImagePlaceholder(),
+                            )
+                          : _serviceImagePlaceholder(),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            sName,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: textMainColor,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            priceText,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "Descripción",
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: textMainColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  sDesc,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: textSecondaryColor,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.storefront_outlined,
+                      size: 18,
+                      color: secondaryColor,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Negocio: ",
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: textMainColor,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        shop.nombre,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: textSecondaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (duration != null) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.schedule, size: 18, color: secondaryColor),
+                      const SizedBox(width: 10),
+                      Text(
+                        "Duración: ",
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: textMainColor,
+                        ),
+                      ),
+                      Text(
+                        "$duration min",
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: textSecondaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 18,
+                      color: secondaryColor,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Dirección: ",
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: textMainColor,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        addressDisplay,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: textSecondaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.storefront_outlined, size: 18),
+                    label: const Text(
+                      "Ver negocio",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.pushNamed(
+                        context,
+                        '/businessDetail',
+                        arguments: shop,
+                      );
+                    },
+                  ),
+                ),
+                if (canShowRoute) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: secondaryColor,
+                        side: BorderSide(color: secondaryColor),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.route, size: 18),
+                      label: const Text(
+                        "Ver ruta",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(sheetContext);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BusinessMapScreen(
+                              shop: shop,
+                              formattedAddress: formattedAddress,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -469,9 +845,19 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   }
 
   Widget _buildCategoryChips() {
+    final regularCategories = categories
+        .where((c) => c.nombre.trim().toLowerCase() != "otro")
+        .toList();
+    final otherCategories = categories
+        .where((c) => c.nombre.trim().toLowerCase() == "otro")
+        .toList();
+
     final items = <Widget>[
       _categoryChip("Todos", null),
-      ...categories.map(
+      ...regularCategories.map(
+        (category) => _categoryChip(category.nombre, category.id),
+      ),
+      ...otherCategories.map(
         (category) => _categoryChip(category.nombre, category.id),
       ),
     ];
@@ -590,13 +976,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           _nearbyActionButton(),
           const SizedBox(width: 6),
           _filterButton(
-            icon: Icons.location_on_outlined,
-            active: ciudad.isNotEmpty,
-            tooltip: "Filtrar por ciudad",
-            onPressed: _openCityFilter,
-          ),
-          const SizedBox(width: 6),
-          _filterButton(
             icon: Icons.event_available,
             active: disponibleFecha != null,
             tooltip: "Filtrar por disponibilidad",
@@ -707,6 +1086,34 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       );
     }
 
+    final isSearching = query.trim().isNotEmpty;
+
+    if (isSearching) {
+      if (matchedServices.isEmpty) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              "No se encontraron servicios activos para \"$query\".",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: textSecondaryColor),
+            ),
+          ),
+        );
+      }
+
+      return RefreshIndicator(
+        color: primaryColor,
+        onRefresh: _loadShops,
+        child: ListView.builder(
+          padding: const EdgeInsets.only(bottom: 16),
+          itemCount: matchedServices.length,
+          itemBuilder: (context, index) =>
+              _buildServiceCard(matchedServices[index]),
+        ),
+      );
+    }
+
     if (shops.isEmpty) {
       return Center(
         child: Padding(
@@ -714,8 +1121,8 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           child: Text(
             _hasActiveFilters
                 ? _hasLocation
-                      ? "No se encontraron negocios dentro de ${radioKm.toStringAsFixed(0)} km con los filtros seleccionados."
-                      : "No se encontraron negocios con los filtros seleccionados."
+                    ? "No se encontraron negocios dentro de ${radioKm.toStringAsFixed(0)} km con los filtros seleccionados."
+                    : "No se encontraron negocios con los filtros seleccionados."
                 : "No hay negocios registrados por el momento.",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: textSecondaryColor),
@@ -732,6 +1139,102 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         itemCount: shops.length,
         itemBuilder: (context, index) => _buildShopCard(shops[index]),
       ),
+    );
+  }
+
+  Widget _buildServiceCard(Map<String, dynamic> item) {
+    final Shop shop = item['shop'] as Shop;
+    final String sName = item['serviceName'] as String;
+    final String sDesc = item['serviceDescription'] as String;
+    final String priceText = _singlePriceLabel(item['price']);
+    final String imgUrl = (item['image'] as String?) ?? '';
+
+    return Card(
+      color: surfaceColor,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openServiceDetailsModal(item),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: imgUrl.isNotEmpty
+                    ? Image.network(
+                        imgUrl,
+                        width: 68,
+                        height: 68,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _serviceImagePlaceholder(),
+                      )
+                    : _serviceImagePlaceholder(),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      sName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: textMainColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      shop.nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: secondaryColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      sDesc,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: textSecondaryColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      priceText,
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: textSecondaryColor),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _serviceImagePlaceholder() {
+    return Container(
+      width: 68,
+      height: 68,
+      color: secondaryColor.withValues(alpha: 0.14),
+      child: Icon(Icons.miscellaneous_services, color: secondaryColor),
     );
   }
 

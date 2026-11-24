@@ -13,7 +13,7 @@ import { Button } from "../../../shared/components/ui/Button";
 import { Field, Input } from "../../../shared/components/ui/Field";
 
 export function LoginForm() {
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const navigate = useNavigate();
 
   const [correo, setCorreo] = useState("");
@@ -33,7 +33,12 @@ export function LoginForm() {
 
     setLoading(true);
     try {
-      await login({ correo: correo.trim(), password });
+      const userLogin = await login({ correo: correo.trim(), password });
+      if (userLogin.rol !== "negocio") {
+        await logout();
+        setError("Esta cuenta no tiene acceso al panel de negocio.");
+        return;
+      }
       navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pudimos iniciar sesión.");

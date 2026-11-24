@@ -67,7 +67,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     super.dispose();
   }
 
-  Future<void> _initialLoad() async {
+  Future <void> _initialLoad() async {
     await _loadCategories();
     if (mounted) {
       await _loadShops();
@@ -321,11 +321,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
         list.sort(
           (a, b) => (b.precioMaximo ?? b.precioMinimo ?? -1)
               .compareTo(a.precioMaximo ?? a.precioMinimo ?? -1),
-        );
-        break;
-      case "populares":
-        list.sort(
-          (a, b) => (b.valoracion ?? -1).compareTo(a.valoracion ?? -1),
         );
         break;
       case "distancia":

@@ -1019,6 +1019,33 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     );
   }
 
+  Widget _buildSectionHeader(String title, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: textMainColor,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            "($count)",
+            style: TextStyle(
+              color: textSecondaryColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (isLoading) {
       return Center(child: CircularProgressIndicator(color: primaryColor));

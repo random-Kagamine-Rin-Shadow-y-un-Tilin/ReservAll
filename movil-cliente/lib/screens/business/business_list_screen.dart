@@ -17,9 +17,6 @@ class BusinessListScreen extends StatefulWidget {
 
 class _BusinessListScreenState extends State<BusinessListScreen> {
   static const List<double> _radiusOptionsKm = [1, 3, 5, 10, 25];
-  static const List<double> _priceMinOptions = [50, 100, 200];
-  static const List<double> _priceMaxOptions = [200, 500, 1000];
-  static const List<int> _durationMaxOptions = [15, 30, 60, 90, 120];
 
   List<Shop> shops = [];
   List<Map<String, dynamic>> matchedServices = [];
@@ -39,9 +36,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   String orden = "relevancia";
   DateTime? disponibleFecha;
   TimeOfDay? disponibleHora;
-  double? minPrecio;
-  double? maxPrecio;
-  int? maxDuracionMin;
   double? latitud;
   double? longitud;
   double radioKm = 5;
@@ -156,99 +150,17 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     return raw.isEmpty ? null : raw;
   }
 
-  double? _parsePrice(Map<String, dynamic> svcMap, Shop fallbackShop) {
-    final raw = svcMap['precio'] ??
-        svcMap['precio_servicio'] ??
-        svcMap['tarifa'] ??
-        svcMap['costo'] ??
-        fallbackShop.precioMinimo;
-    if (raw == null) return null;
-    if (raw is num) return raw.toDouble();
-    final cleaned = raw
-        .toString()
-        .replaceAll(RegExp(r'[^0-9.,-]'), '')
-        .replaceAll(',', '')
-        .trim();
-    return double.tryParse(cleaned);
-  }
-
-  int? _parseDuration(Map<String, dynamic> svcMap) {
-    final raw = svcMap['duracion_minutos'] ??
-        svcMap['duracion'] ??
-        svcMap['tiempo_minutos'] ??
-        svcMap['duracionMinutos'];
-    if (raw == null) return null;
-    if (raw is int) return raw;
-    if (raw is num) return raw.round();
-    final cleaned = raw.toString().replaceAll(RegExp(r'[^0-9]'), '').trim();
-    return int.tryParse(cleaned);
-  }
-
-  String _resolveServiceCategory(
-      Map<String, dynamic> svcMap, Shop resolvedShop) {
-    final rawCat = svcMap['categoria'] ??
-        svcMap['categoria_servicio'] ??
-        svcMap['categoria_nombre'] ??
-        svcMap['category'];
-    if (rawCat != null && rawCat.toString().trim().isNotEmpty) {
-      return rawCat.toString().trim();
-    }
-    return resolvedShop.categoriaNegocio;
-  }
-
-  bool _matchesShopQuery(Shop shop, String searchTerm) {
-    final term = searchTerm.trim().toLowerCase();
-    if (term.isEmpty) return true;
-    return shop.nombre.toLowerCase().contains(term);
-  }
-
-  bool _matchesHu21ServiceFilters({
-    required String serviceName,
-    required String serviceDescription,
-    required String serviceCategory,
-    required double? price,
-    required int? durationMin,
-    required String searchTerm,
-  }) {
-    final term = searchTerm.trim().toLowerCase();
-    if (term.isNotEmpty) {
-      final matchesServiceName = serviceName.toLowerCase().contains(term);
-      if (!matchesServiceName) return false;
-    }
-
-    if (selectedCategory != "Todos") {
-      final targetCat = selectedCategory.trim().toLowerCase();
-      final svcCat = serviceCategory.trim().toLowerCase();
-      if (svcCat.isNotEmpty && svcCat != targetCat) {
-        return false;
-      }
-    }
-
-    if (minPrecio != null) {
-      if (price == null || price < minPrecio!) return false;
-    }
-
-    if (maxPrecio != null) {
-      if (price == null || price > maxPrecio!) return false;
-    }
-
-    if (maxDuracionMin != null) {
-      if (durationMin == null || durationMin > maxDuracionMin!) return false;
-    }
-
-    return true;
-  }
-
   Future<List<Map<String, dynamic>>> _searchMatchingActiveServices(
     List<Shop> candidateShops,
     String searchTerm,
     int requestId,
   ) async {
     final term = searchTerm.trim().toLowerCase();
-    if (candidateShops.isEmpty) return const [];
+    if (term.isEmpty || candidateShops.isEmpty) return const [];
 
-    final targets = candidateShops.take(20).toList();
+    final targets = candidateShops.take(15).toList();
     final results = <Map<String, dynamic>>[];
+
     await Future.wait(
       targets.map((shop) async {
         try {
@@ -271,39 +183,24 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                   (svcMap['id_servicio'] ?? svcMap['id'] ?? 0).toString(),
                 ) ??
                 0;
-            final String sName = (svcMap['nombre'] ??
-                    svcMap['name'] ??
-                    svcMap['titulo'] ??
-                    'Servicio')
-                .toString();
+            final String sName =
+                (svcMap['nombre'] ?? svcMap['name'] ?? 'Servicio').toString();
             final String sDesc = ServiceDescriptionHelper.resolve(
               raw: svcMap,
               serviceId: sId > 0 ? sId : null,
               serviceName: sName,
             );
-            final String sCat = _resolveServiceCategory(svcMap, resolvedShop);
-            final double? parsedPrice = _parsePrice(svcMap, resolvedShop);
-            final int? parsedDuration = _parseDuration(svcMap);
 
-            final passes = _matchesHu21ServiceFilters(
-              serviceName: sName,
-              serviceDescription: sDesc,
-              serviceCategory: sCat,
-              price: parsedPrice,
-              durationMin: parsedDuration,
-              searchTerm: term,
-            );
-
-            if (passes) {
+            if (sName.toLowerCase().contains(term) ||
+                sDesc.toLowerCase().contains(term)) {
               results.add({
                 'shop': resolvedShop,
                 'formattedAddress': formattedAddress,
                 'serviceId': sId,
                 'serviceName': sName,
                 'serviceDescription': sDesc,
-                'serviceCategory': sCat,
-                'duration': parsedDuration,
-                'price': parsedPrice,
+                'duration': svcMap['duracion_minutos'],
+                'price': svcMap['precio'],
                 'image': _getImageUrl(
                   svcMap['imagen'] ??
                       svcMap['imagen_url'] ??
@@ -321,29 +218,22 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     return results;
   }
 
-  bool get _hasServiceOnlyFilterActive =>
-      minPrecio != null || maxPrecio != null || maxDuracionMin != null;
-
-  bool get _shouldSearchServices =>
-      query.trim().isNotEmpty || _hasServiceOnlyFilterActive;
-
   Future<void> _loadShops() async {
     if (!mounted) return;
     final requestId = ++_requestId;
     final currentQuery = query.trim();
-    final normalizedTerm = currentQuery.toLowerCase();
 
     setState(() {
       isLoading = true;
       errorMessage = null;
-      if (!_shouldSearchServices) {
+      if (currentQuery.isEmpty) {
         matchedServices = [];
       }
     });
 
     try {
       var result = await searchCatalog(
-        q: "",
+        q: currentQuery,
         categoriaId: selectedCategoryId,
         categoria: selectedCategoryId == null && selectedCategory != "Todos"
             ? selectedCategory
@@ -364,29 +254,42 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           userLng: longitud!,
           maxRadiusKm: radioKm,
         );
-      }
-
-      final filteredShops = normalizedTerm.isEmpty
-          ? List<Shop>.from(result)
-          : result.where((s) => _matchesShopQuery(s, normalizedTerm)).toList();
-
-      if (orden != "relevancia" &&
-          !(_hasLocation && orden == "distancia")) {
-        _sortShops(filteredShops, orden);
+        if (orden != "distancia") {
+          _sortShops(result, orden);
+        }
       }
 
       List<Map<String, dynamic>> foundServices = const [];
-      if (_shouldSearchServices) {
+      if (currentQuery.isNotEmpty) {
+        var pool = result;
+        if (pool.isEmpty) {
+          pool = await searchCatalog(
+            q: "",
+            categoriaId: selectedCategoryId,
+            categoria: selectedCategoryId == null && selectedCategory != "Todos"
+                ? selectedCategory
+                : null,
+            ciudad: ciudad.isEmpty ? null : ciudad,
+            lat: latitud,
+            lng: longitud,
+            radioKm: _hasLocation ? radioKm : null,
+            fecha: disponibleFecha == null
+                ? null
+                : _formatDate(disponibleFecha!),
+            hora: disponibleHora == null ? null : _formatTime(disponibleHora!),
+            orden: orden,
+          );
+        }
         foundServices = await _searchMatchingActiveServices(
-          result,
-          normalizedTerm,
+          pool,
+          currentQuery,
           requestId,
         );
       }
 
       if (!mounted || requestId != _requestId) return;
       setState(() {
-        shops = filteredShops;
+        shops = result;
         matchedServices = foundServices;
         isLoading = false;
       });
@@ -462,217 +365,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   void _selectRadius(double radius) {
     if (radioKm == radius) return;
     setState(() => radioKm = radius);
-    _loadShops();
-  }
-
-  Future<void> _openSortFilter() async {
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: surfaceColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(
-              title: Text(
-                "Ordenar resultados",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              title: const Text("Relevancia"),
-              trailing: orden == "relevancia" ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.pop(context, "relevancia"),
-            ),
-            ListTile(
-              title: const Text("Menor precio"),
-              trailing: orden == "precio_asc" ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.pop(context, "precio_asc"),
-            ),
-            ListTile(
-              title: const Text("Más cercanos"),
-              subtitle: !_hasLocation
-                  ? const Text("Activa tu ubicación para ordenar por distancia")
-                  : null,
-              trailing: orden == "distancia" ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.pop(context, "distancia"),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (selected == null || !mounted) return;
-
-    if (selected == "distancia" && !_hasLocation) {
-      await _useMyLocation();
-      return;
-    }
-
-    setState(() => orden = selected);
-    _loadShops();
-  }
-
-  Future<void> _openPriceRangeFilter() async {
-    double? tempMin = minPrecio;
-    double? tempMax = maxPrecio;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: surfaceColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Filtrar servicios por precio",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: textMainColor,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "Precio mínimo",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: textSecondaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text("Sin mín."),
-                          selected: tempMin == null,
-                          selectedColor: secondaryColor,
-                          onSelected: (_) =>
-                              setModalState(() => tempMin = null),
-                        ),
-                        ..._priceMinOptions.map(
-                          (val) => ChoiceChip(
-                            label: Text("\$${val.toStringAsFixed(0)}"),
-                            selected: tempMin == val,
-                            selectedColor: secondaryColor,
-                            onSelected: (_) =>
-                                setModalState(() => tempMin = val),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "Precio máximo",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: textSecondaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text("Sin máx."),
-                          selected: tempMax == null,
-                          selectedColor: secondaryColor,
-                          onSelected: (_) =>
-                              setModalState(() => tempMax = null),
-                        ),
-                        ..._priceMaxOptions.map(
-                          (val) => ChoiceChip(
-                            label: Text("\$${val.toStringAsFixed(0)}"),
-                            selected: tempMax == val,
-                            selectedColor: secondaryColor,
-                            onSelected: (_) =>
-                                setModalState(() => tempMax = val),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () => Navigator.pop(sheetContext),
-                        child: const Text("Aplicar"),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted) return;
-    setState(() {
-      minPrecio = tempMin;
-      maxPrecio = tempMax;
-    });
-    _loadShops();
-  }
-
-  Future<void> _openDurationFilter() async {
-    final selected = await showModalBottomSheet<int?>(
-      context: context,
-      backgroundColor: surfaceColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(
-              title: Text(
-                "Duración máxima del servicio",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              title: const Text("Cualquier duración"),
-              trailing:
-                  maxDuracionMin == null ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.pop(context, null),
-            ),
-            ..._durationMaxOptions.map(
-              (mins) => ListTile(
-                title: Text("Hasta $mins min"),
-                trailing:
-                    maxDuracionMin == mins ? const Icon(Icons.check) : null,
-                onTap: () => Navigator.pop(context, mins),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (!mounted) return;
-    setState(() => maxDuracionMin = selected);
     _loadShops();
   }
 
@@ -768,9 +460,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       orden = "relevancia";
       disponibleFecha = null;
       disponibleHora = null;
-      minPrecio = null;
-      maxPrecio = null;
-      maxDuracionMin = null;
       latitud = null;
       longitud = null;
       radioKm = 5;
@@ -784,9 +473,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       ciudad.isNotEmpty ||
       selectedCategory != "Todos" ||
       disponibleFecha != null ||
-      minPrecio != null ||
-      maxPrecio != null ||
-      maxDuracionMin != null ||
       latitud != null ||
       orden != "relevancia";
 
@@ -819,9 +505,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
 
   String _singlePriceLabel(dynamic rawPrice) {
     if (rawPrice == null) return "Precio no disponible";
-    final value = rawPrice is num
-        ? rawPrice.toDouble()
-        : double.tryParse(rawPrice.toString());
+    final value = double.tryParse(rawPrice.toString());
     if (value == null) return "\$$rawPrice";
     return "\$${value.toStringAsFixed(2)}";
   }
@@ -1251,27 +935,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           _nearbyActionButton(),
           const SizedBox(width: 6),
           _filterButton(
-            icon: Icons.sort,
-            active: orden != "relevancia",
-            tooltip: "Ordenar resultados",
-            onPressed: _openSortFilter,
-          ),
-          const SizedBox(width: 6),
-          _filterButton(
-            icon: Icons.payments_outlined,
-            active: hasPriceFilter,
-            tooltip: "Precio mín / máx",
-            onPressed: _openPriceRangeFilter,
-          ),
-          const SizedBox(width: 6),
-          _filterButton(
-            icon: Icons.timer_outlined,
-            active: maxDuracionMin != null,
-            tooltip: "Duración máxima",
-            onPressed: _openDurationFilter,
-          ),
-          const SizedBox(width: 6),
-          _filterButton(
             icon: Icons.event_available,
             active: disponibleFecha != null,
             tooltip: "Filtrar por disponibilidad",
@@ -1409,15 +1072,15 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       );
     }
 
-    if (_hasServiceOnlyFilterActive) {
+    final isSearching = query.trim().isNotEmpty;
+
+    if (isSearching) {
       if (matchedServices.isEmpty) {
         return Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              query.trim().isNotEmpty
-                  ? "No se encontraron servicios activos para \"$query\" con los filtros seleccionados."
-                  : "No se encontraron servicios activos con los filtros seleccionados.",
+              "No se encontraron servicios activos para \"$query\".",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, color: textSecondaryColor),
             ),
@@ -1433,39 +1096,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           itemCount: matchedServices.length,
           itemBuilder: (context, index) =>
               _buildServiceCard(matchedServices[index]),
-        ),
-      );
-    }
-
-    if (query.trim().isNotEmpty) {
-      if (shops.isEmpty && matchedServices.isEmpty) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              "No se encontraron coincidencias para \"$query\".",
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: textSecondaryColor),
-            ),
-          ),
-        );
-      }
-
-      return RefreshIndicator(
-        color: primaryColor,
-        onRefresh: _loadShops,
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 16),
-          children: [
-            if (shops.isNotEmpty) ...[
-              _buildSectionHeader("Negocios", shops.length),
-              ...shops.map(_buildShopCard),
-            ],
-            if (matchedServices.isNotEmpty) ...[
-              _buildSectionHeader("Servicios", matchedServices.length),
-              ...matchedServices.map(_buildServiceCard),
-            ],
-          ],
         ),
       );
     }
@@ -1504,7 +1134,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
     final String sDesc = item['serviceDescription'] as String;
     final String priceText = _singlePriceLabel(item['price']);
     final String imgUrl = (item['image'] as String?) ?? '';
-    final dynamic duration = item['duration'];
 
     return Card(
       color: surfaceColor,
@@ -1567,27 +1196,13 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Text(
-                          priceText,
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13.5,
-                          ),
-                        ),
-                        if (duration != null) ...[
-                          const Spacer(),
-                          Text(
-                            "$duration min",
-                            style: TextStyle(
-                              color: textSecondaryColor,
-                              fontSize: 11.5,
-                            ),
-                          ),
-                        ],
-                      ],
+                    Text(
+                      priceText,
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13.5,
+                      ),
                     ),
                   ],
                 ),

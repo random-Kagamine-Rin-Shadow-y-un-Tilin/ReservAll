@@ -1,6 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '/models/shop.dart';
 import '/services/api_service.dart';
 import '/services/service_description_helper.dart';
@@ -113,7 +113,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         }
       }
     } catch (e) {
-      print("Error al verificar favorito desde Supabase: $e");
+      debugPrint("Error al verificar favorito desde Supabase: $e");
     }
   }
 
@@ -147,13 +147,26 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
           );
         }
       } else {
-        print(
+        debugPrint(
           "Error del servidor al modificar favorito: ${response.statusCode} - ${response.body}",
         );
       }
     } catch (e) {
-      print("Error de conexión al modificar favorito: $e");
+      debugPrint("Error de conexión al modificar favorito: $e");
     }
+  }
+
+  void _openBusinessMap(Shop currentShop, String? addressText) {
+    if (!currentShop.hasCoordinates) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BusinessMapScreen(
+          shop: currentShop,
+          formattedAddress: addressText,
+        ),
+      ),
+    );
   }
 
   String _getImageUrl(dynamic rawImage) {
@@ -391,7 +404,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         child: Image.network(
           imageUrl,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) =>
+          errorBuilder: (_, _, _) =>
               Center(child: Icon(Icons.store, size: 64, color: primaryColor)),
         ),
       ),
@@ -532,22 +545,11 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BusinessMapScreen(
-                          shop: currentShop,
-                          formattedAddress: addressText,
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: () => _openBusinessMap(currentShop, addressText),
                   icon: const Icon(Icons.map_outlined, size: 18),
                   label: const Text("Ver en mapa"),
                 ),
               ),
-
             ],
           ],
         ),

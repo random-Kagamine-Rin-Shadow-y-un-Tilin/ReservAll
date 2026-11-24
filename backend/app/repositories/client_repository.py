@@ -69,6 +69,7 @@ _SHOP_SELECT = """
         GROUP BY s.negocio_id
     ) AS pop ON pop.negocio_id = n.id
     WHERE n.estado_negocio = TRUE
+      AND COALESCE((to_jsonb(c)->>'estado')::boolean, TRUE) = TRUE
 """
 
 _DISTANCE_SELECT = """
@@ -106,15 +107,15 @@ _DISTANCE_SELECT = """
 """
 
 _ORDER_BY = {
-    "relevancia": "nombre ASC",
-    "nombre": "nombre ASC",
-    "precio_asc": "precio_minimo ASC NULLS LAST, nombre ASC",
-    "precio_desc": "precio_minimo DESC NULLS LAST, nombre ASC",
-    "distancia": "distancia_km ASC NULLS LAST, nombre ASC",
+    "relevancia": "nombre ASC, id ASC",
+    "nombre": "nombre ASC, id ASC",
+    "precio_asc": "precio_minimo ASC NULLS LAST, nombre ASC, id ASC",
+    "precio_desc": "precio_minimo DESC NULLS LAST, nombre ASC, id ASC",
+    "distancia": "distancia_km ASC NULLS LAST, nombre ASC, id ASC",
     # HU_37 (filtrar/ordenar por valoración) está marcada como WON'T. Se deja
     # el criterio aceptado para cuando exista la tabla de reseñas.
-    "valoracion": "valoracion DESC NULLS LAST, nombre ASC",
-    "populares": "reservas_count DESC, nombre ASC",
+    "valoracion": "valoracion DESC NULLS LAST, nombre ASC, id ASC",
+    "populares": "reservas_count DESC, nombre ASC, id ASC",
 }
 
 
@@ -129,24 +130,18 @@ def _build_shop_query(lat: Optional[float], lng: Optional[float]):
     return _SHOP_SELECT.format(distance_select=distance_select), params
 
 
-async def search_shops_catalog(
-    pool: asyncpg.Pool,
+def _shop_catalog_filters(
+    params: list[object],
     *,
     q: Optional[str] = None,
     categoria_id: Optional[int] = None,
     categoria: Optional[str] = None,
     ciudad: Optional[str] = None,
-    lat: Optional[float] = None,
-    lng: Optional[float] = None,
     radio_km: Optional[float] = None,
     precio_min: Optional[float] = None,
     precio_max: Optional[float] = None,
-    orden: str = "relevancia",
-    limit: int = 50,
-    offset: int = 0,
     negocio_id: Optional[int] = None,
 ):
-    inner, params = _build_shop_query(lat, lng)
     filters: list[str] = []
 
     if negocio_id is not None:
@@ -194,26 +189,90 @@ async def search_shops_catalog(
         params.append(float(radio_km))
         filters.append(f"distancia_km <= ${len(params)}")
 
-    where_clause = ""
-    if filters:
-        where_clause = " WHERE " + " AND ".join(filters)
+    return (" WHERE " + " AND ".join(filters)) if filters else ""
 
+
+async def search_shops_catalog(
+    pool: asyncpg.Pool,
+    *,
+    q: Optional[str] = None,
+    categoria_id: Optional[int] = None,
+    categoria: Optional[str] = None,
+    ciudad: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radio_km: Optional[float] = None,
+    precio_min: Optional[float] = None,
+    precio_max: Optional[float] = None,
+    orden: str = "relevancia",
+    limit: Optional[int] = 50,
+    offset: int = 0,
+    negocio_id: Optional[int] = None,
+):
+    inner, params = _build_shop_query(lat, lng)
+    where_clause = _shop_catalog_filters(
+        params,
+        q=q,
+        categoria_id=categoria_id,
+        categoria=categoria,
+        ciudad=ciudad,
+        radio_km=radio_km,
+        precio_min=precio_min,
+        precio_max=precio_max,
+        negocio_id=negocio_id,
+    )
     order_clause = _ORDER_BY.get(orden, _ORDER_BY["relevancia"])
-
-    params.append(int(limit))
-    limit_idx = len(params)
-    params.append(int(offset))
-    offset_idx = len(params)
 
     query = (
         f"WITH shop_data AS ({inner})"
         f" SELECT * FROM shop_data{where_clause}"
         f" ORDER BY {order_clause}"
-        f" LIMIT ${limit_idx} OFFSET ${offset_idx}"
     )
+
+    if limit is not None:
+        params.append(int(limit))
+        limit_idx = len(params)
+        params.append(int(offset))
+        offset_idx = len(params)
+        query += f" LIMIT ${limit_idx} OFFSET ${offset_idx}"
 
     async with pool.acquire() as conn:
         return await conn.fetch(query, *params)
+
+
+async def count_shops_catalog(
+    pool: asyncpg.Pool,
+    *,
+    q: Optional[str] = None,
+    categoria_id: Optional[int] = None,
+    categoria: Optional[str] = None,
+    ciudad: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radio_km: Optional[float] = None,
+    precio_min: Optional[float] = None,
+    precio_max: Optional[float] = None,
+    negocio_id: Optional[int] = None,
+) -> int:
+    inner, params = _build_shop_query(lat, lng)
+    where_clause = _shop_catalog_filters(
+        params,
+        q=q,
+        categoria_id=categoria_id,
+        categoria=categoria,
+        ciudad=ciudad,
+        radio_km=radio_km,
+        precio_min=precio_min,
+        precio_max=precio_max,
+        negocio_id=negocio_id,
+    )
+    query = (
+        f"WITH shop_data AS ({inner})"
+        f" SELECT COUNT(*)::int AS total FROM shop_data{where_clause}"
+    )
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(query, *params)
+    return int(row["total"])
 
 
 # Marcadores para el mapa -----------------------------------------------------
@@ -271,6 +330,7 @@ _MAP_SELECT = """
         GROUP BY negocio_id
     ) AS ss ON ss.negocio_id = n.id
     WHERE n.estado_negocio = TRUE
+      AND COALESCE((to_jsonb(c)->>'estado')::boolean, TRUE) = TRUE
       AND d.latitud IS NOT NULL
       AND d.longitud IS NOT NULL
 """
@@ -362,7 +422,7 @@ async def list_map_shops(
     query = (
         f"WITH shop_data AS ({inner})"
         f" SELECT * FROM shop_data{where_clause}"
-        " ORDER BY distancia_km ASC NULLS LAST, nombre ASC"
+        " ORDER BY distancia_km ASC NULLS LAST, nombre ASC, id ASC"
         f" LIMIT ${limit_idx} OFFSET ${offset_idx}"
     )
 
@@ -404,8 +464,9 @@ async def get_categories(pool: asyncpg.Pool):
             COUNT(n.id) FILTER (WHERE n.estado_negocio = TRUE) AS negocios_count
         FROM categorias AS c
         LEFT JOIN negocios AS n ON n.fk_categoria = c.id_categoria
+        WHERE COALESCE((to_jsonb(c)->>'estado')::boolean, TRUE) = TRUE
         GROUP BY c.id_categoria, c.nombre_categoria
-        ORDER BY c.nombre_categoria
+        ORDER BY c.nombre_categoria, c.id_categoria
     """
     async with pool.acquire() as conn:
         return await conn.fetch(query)
@@ -417,12 +478,15 @@ async def get_horarios_by_negocio_dia(pool: asyncpg.Pool, negocio_id: int, dia: 
             n.id, n.dueno_id, n.nombre, n.descripcion, n.imagen_negocio,
             c.nombre_categoria AS categoria_negocio, n.estado_negocio,
             h.id_horario, h.dia, h.hora_apertura, h.hora_cierre,
-            h.hora_descanso, h.estado_horario
+            h.hora_descanso, h.estado_horario,
+            COALESCE((to_jsonb(h)->>'descanso_duracion_min')::int, 60)
+                AS descanso_duracion_min
         FROM negocios AS n
         INNER JOIN categorias AS c ON c.id_categoria = n.fk_categoria
         INNER JOIN horarios AS h ON h.negocio_id = n.id
         WHERE n.id = $1
             AND n.estado_negocio = true
+            AND COALESCE((to_jsonb(c)->>'estado')::boolean, TRUE) = TRUE
             AND h.estado_horario = true
             AND LOWER(h.dia::text) = LOWER($2)
         ORDER BY h.hora_apertura
@@ -487,7 +551,7 @@ async def get_reservas_by_negocio_fecha_hora(
 # Obtener servicios de un negocio
 async def get_servicios_by_negocio(pool: asyncpg.Pool, negocio_id: int):
     query = """
-        SELECT 
+        SELECT
             id_servicio, negocio_id, nombre, duracion_minutos, precio
         FROM servicios
         WHERE negocio_id = $1
@@ -500,7 +564,7 @@ async def get_servicios_by_negocio(pool: asyncpg.Pool, negocio_id: int):
 # Obtener un servicio por su ID
 async def get_servicio_by_id(pool: asyncpg.Pool, servicio_id: int):
     query = """
-        SELECT 
+        SELECT
             id_servicio, negocio_id, nombre, duracion_minutos, precio,
             estado_servicio
         FROM servicios
@@ -887,7 +951,9 @@ async def get_horarios_by_negocio(pool: asyncpg.Pool, negocio_id: int):
     query = """
         SELECT
             h.id_horario, h.negocio_id, h.dia, h.hora_apertura, h.hora_cierre,
-            h.hora_descanso, h.estado_horario
+            h.hora_descanso, h.estado_horario,
+            COALESCE((to_jsonb(h)->>'descanso_duracion_min')::int, 60)
+                AS descanso_duracion_min
         FROM horarios AS h
         WHERE h.negocio_id = $1
             AND h.estado_horario = true

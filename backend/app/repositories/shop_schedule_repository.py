@@ -2,60 +2,77 @@ import asyncpg
 from typing import Optional
 
 
+_SCHEDULE_COLUMNS = """
+    id_horario, negocio_id, dia, hora_apertura, hora_cierre,
+    hora_descanso,
+    COALESCE((to_jsonb(horarios)->>'descanso_duracion_min')::int, 60)
+        AS descanso_duracion_min,
+    estado_horario
+"""
+
+
 async def get_weekly_schedule(
     pool: asyncpg.Pool, shop_id: int, include_inactive: bool = True
 ):
-    query = """
-        SELECT id_horario, negocio_id, dia, hora_apertura, hora_cierre,
-               hora_descanso, estado_horario
+    query = f"""
+        SELECT {_SCHEDULE_COLUMNS}
         FROM horarios
         WHERE negocio_id = $1
     """
     if not include_inactive:
         query += " AND estado_horario = TRUE"
-    query += " ORDER BY dia"
+    query += " ORDER BY dia, hora_apertura"
 
     async with pool.acquire() as conn:
         return await conn.fetch(query, shop_id)
 
 
-async def get_day_by_shop_and_day(pool: asyncpg.Pool, shop_id: int, day: str):
-    query = """
-        SELECT id_horario, dia
+async def get_schedules_by_shop_and_day(pool: asyncpg.Pool, shop_id: int, day: str):
+    query = f"""
+        SELECT {_SCHEDULE_COLUMNS}
         FROM horarios
-        WHERE negocio_id = $1
-          AND dia = $2
+        WHERE negocio_id = $1 AND dia = $2
+        ORDER BY hora_apertura
     """
     async with pool.acquire() as conn:
-        return await conn.fetchrow(query, shop_id, day)
+        return await conn.fetch(query, shop_id, day)
 
 
 async def create_schedule(
     pool: asyncpg.Pool,
     shop_id: int,
     day: str,
-    open_hour: str,
-    close_hour: str,
-    break_hour: Optional[str] = None,
+    open_hour,
+    close_hour,
+    break_hour: Optional[object] = None,
+    break_duration_min: int = 60,
+    estado_horario: bool = True,
 ):
     query = """
         INSERT INTO horarios (
-            negocio_id, dia, hora_apertura, hora_cierre, hora_descanso
+            negocio_id, dia, hora_apertura, hora_cierre, hora_descanso,
+            descanso_duracion_min, estado_horario
         )
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id_horario, dia, hora_apertura, hora_cierre,
-                  hora_descanso, estado_horario
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id_horario, dia, hora_apertura, hora_cierre, hora_descanso,
+                  descanso_duracion_min, estado_horario
     """
     async with pool.acquire() as conn:
         return await conn.fetchrow(
-            query, shop_id, day, open_hour, close_hour, break_hour
+            query,
+            shop_id,
+            day,
+            open_hour,
+            close_hour,
+            break_hour,
+            break_duration_min,
+            estado_horario,
         )
 
 
 async def get_schedule_by_id(pool: asyncpg.Pool, schedule_id: int):
-    query = """
-        SELECT id_horario, negocio_id, dia, hora_apertura, hora_cierre,
-               hora_descanso, estado_horario
+    query = f"""
+        SELECT {_SCHEDULE_COLUMNS}
         FROM horarios
         WHERE id_horario = $1
     """
@@ -72,7 +89,13 @@ async def update_schedule(
     un ``hora_descanso: null`` explícito (que debe borrar el descanso).
     """
 
-    allowed = {"hora_apertura", "hora_cierre", "hora_descanso", "estado_horario"}
+    allowed = {
+        "hora_apertura",
+        "hora_cierre",
+        "hora_descanso",
+        "descanso_duracion_min",
+        "estado_horario",
+    }
     sets: list[str] = []
     values: list[object] = []
 
@@ -90,8 +113,8 @@ async def update_schedule(
         UPDATE horarios
         SET {', '.join(sets)}
         WHERE id_horario = ${len(values)}
-        RETURNING id_horario, dia, hora_apertura, hora_cierre,
-                  hora_descanso, estado_horario
+        RETURNING id_horario, dia, hora_apertura, hora_cierre, hora_descanso,
+                  descanso_duracion_min, estado_horario
     """
     async with pool.acquire() as conn:
         return await conn.fetchrow(query, *values)

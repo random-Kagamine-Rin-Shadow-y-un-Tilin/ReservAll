@@ -7,6 +7,8 @@ from app.models.client import (
     DiaSemana,
     ReservationResponse,
     ServiceView,
+    ShopCatalogPage,
+    ShopView,
 )
 from app.repositories import client_repository as repo
 from app.repositories import agenda_repository as agenda_repo
@@ -23,6 +25,10 @@ from app.services import agenda_service
 from typing import Optional, List
 from datetime import date, datetime, time
 import asyncpg
+
+def _clean_filter(value):
+    return value.strip() if isinstance(value, str) else None
+
 
 # mapeo de dias de la semana (compatibilidad con código existente)
 DIAS_MAP = {
@@ -181,7 +187,7 @@ async def search_catalog(
     hora: Optional[time] = None,
     servicio_id: Optional[int] = None,
     orden: str = "relevancia",
-    limit: int = 50,
+    limit: Optional[int] = 50,
     offset: int = 0,
 ) -> list[dict]:
     """Búsqueda unificada del catálogo de negocios (HU_34 a HU_41)."""
@@ -225,6 +231,50 @@ async def search_catalog(
         )
 
     return result
+
+
+async def search_catalog_page(
+    pool: asyncpg.Pool,
+    **filtros,
+) -> ShopCatalogPage:
+    """Versión paginada del catálogo; mantiene el endpoint listado intacto."""
+
+    limit = filtros.get("limit", 50)
+    offset = filtros.get("offset", 0)
+    fecha = filtros.get("fecha")
+
+    if fecha is not None:
+        # La disponibilidad se calcula en Python (agenda + reservas + bloqueos),
+        # así que primero se evalúan todos los candidatos y después se pagina.
+        # De lo contrario `total` incluiría negocios sin huecos libres.
+        scan_filtros = dict(filtros, limit=None, offset=0)
+        disponibles = await search_catalog(pool, **scan_filtros)
+        total = len(disponibles)
+        page_items = disponibles[offset : offset + limit]
+    else:
+        page_items = await search_catalog(pool, **filtros)
+        total = await repo.count_shops_catalog(
+            pool,
+            q=_clean_filter(filtros.get("q")),
+            categoria_id=filtros.get("categoria_id"),
+            categoria=_clean_filter(filtros.get("categoria")),
+            ciudad=_clean_filter(filtros.get("ciudad")),
+            lat=filtros.get("lat"),
+            lng=filtros.get("lng"),
+            radio_km=filtros.get("radio_km"),
+            precio_min=filtros.get("precio_min"),
+            precio_max=filtros.get("precio_max"),
+            negocio_id=filtros.get("negocio_id"),
+        )
+
+    pages = (total + limit - 1) // limit if limit > 0 else 0
+    return ShopCatalogPage(
+        items=[ShopView(**item) for item in page_items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        pages=pages,
+    )
 
 
 def _validate_map_filters(
@@ -589,7 +639,11 @@ async def get_available_times(
             duracion_min=duracion,
             intervalo_min=intervalo_minutos,
             descanso_min=descanso,
-            descanso_duracion_min=descanso_minutos,
+            descanso_duracion_min=(
+                horario["descanso_duracion_min"]
+                if horario.get("descanso_duracion_min") is not None
+                else descanso_minutos
+            ),
             reservas=reservas_min,
             bloqueos=bloqueos_min,
         )
@@ -673,13 +727,13 @@ async def get_only_available_times(
         descanso_minutos,
     )
     horarios_libres = [h for h in response.horarios_disponibles if h.disponible]
-    
+
     if not horarios_libres:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No hay horarios disponibles para la fecha seleccionada"
         )
-    
+
     return horarios_libres
 
 
@@ -903,6 +957,9 @@ async def list_my_reservations(
         items=[_reservation_out(row) for row in rows],
         total=total,
         filtro=filtro,
+        limit=limit,
+        offset=offset,
+        pages=(total + limit - 1) // limit if limit > 0 else 0,
     )
 
 
@@ -1138,8 +1195,13 @@ async def check_availability(
             if horario["hora_descanso"] is not None
             else None
         )
+        duracion_descanso = (
+            horario["descanso_duracion_min"]
+            if horario.get("descanso_duracion_min") is not None
+            else descanso_minutos
+        )
         if descanso is None or not overlaps(
-            inicio, fin, descanso, descanso + descanso_minutos
+            inicio, fin, descanso, descanso + duracion_descanso
         ):
             dentro_de_horario = True
             break

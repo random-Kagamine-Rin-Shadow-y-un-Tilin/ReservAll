@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException, status
 from app.core.dependencies import get_db_pool, verify_api_key, get_current_user
 from app.models.client import (
     ShopView,
+    ShopCatalogPage,
     ShopDetailView,
     CategoryView,
     AvailableTimesResponse,
@@ -100,6 +101,46 @@ async def search_catalog(
         limit=limit,
         offset=offset,
     )
+
+# Versión paginada del catálogo: añade total/pages sin romper `/client/shops`.
+@router.get('/shops/page', response_model=ShopCatalogPage)
+async def search_catalog_paginated(
+    q: Optional[str] = Query(None, min_length=2, max_length=100),
+    categoria_id: Optional[int] = Query(None, ge=1),
+    categoria: Optional[str] = Query(None, min_length=2, max_length=100),
+    ciudad: Optional[str] = Query(None, min_length=2, max_length=100),
+    lat: Optional[float] = Query(None, ge=-90, le=90),
+    lng: Optional[float] = Query(None, ge=-180, le=180),
+    radio_km: Optional[float] = Query(None, gt=0, le=500),
+    precio_min: Optional[float] = Query(None, ge=0),
+    precio_max: Optional[float] = Query(None, ge=0),
+    fecha: Optional[date] = Query(None),
+    hora: Optional[time] = Query(None),
+    servicio_id: Optional[int] = Query(None, ge=1),
+    orden: str = Query("relevancia"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await client_service.search_catalog_page(
+        pool,
+        q=q,
+        categoria_id=categoria_id,
+        categoria=categoria,
+        ciudad=ciudad,
+        lat=lat,
+        lng=lng,
+        radio_km=radio_km,
+        precio_min=precio_min,
+        precio_max=precio_max,
+        fecha=fecha,
+        hora=hora,
+        servicio_id=servicio_id,
+        orden=orden,
+        limit=limit,
+        offset=offset,
+    )
+
 
 # Marcadores de negocios para el mapa (HU de ubicaciones)
 @router.get('/map/shops', response_model=list[ShopMapMarker])
@@ -459,7 +500,7 @@ async def check_availability(
     pool: asyncpg.Pool = Depends(get_db_pool)
 ):
     from datetime import datetime
-    
+
     try:
         hora_inicio_obj = datetime.strptime(hora_inicio, '%H:%M').time()
     except ValueError:
@@ -467,7 +508,7 @@ async def check_availability(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Formato de hora inválido. Use HH:MM"
         )
-    
+
     disponible = await client_service.check_availability(
         pool,
         negocio_id,
@@ -477,7 +518,7 @@ async def check_availability(
         profesional_id=profesional_id,
         descanso_minutos=descanso_minutos,
     )
-    
+
     return {
         "negocio_id": negocio_id,
         "fecha": fecha,

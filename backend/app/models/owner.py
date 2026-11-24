@@ -59,9 +59,19 @@ class ReservationSummary(BaseModel):
     ingresos: float = 0
 
 
+class PageMeta(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    pages: int
+
+
 class ReservationListOut(BaseModel):
     items: List[OwnerReservationOut]
     summary: ReservationSummary
+    page: PageMeta = Field(
+        default_factory=lambda: PageMeta(total=0, limit=50, offset=0, pages=0)
+    )
 
 
 class OwnerClientOut(BaseModel):
@@ -81,6 +91,9 @@ class OwnerClientOut(BaseModel):
 class ClientListOut(BaseModel):
     items: List[OwnerClientOut]
     total: int
+    page: PageMeta = Field(
+        default_factory=lambda: PageMeta(total=0, limit=50, offset=0, pages=0)
+    )
 
 
 class OwnerClientDetailOut(OwnerClientOut):

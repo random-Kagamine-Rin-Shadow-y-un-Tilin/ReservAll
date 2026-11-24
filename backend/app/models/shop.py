@@ -1,6 +1,11 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import time
+
+# Una sola definición de horario para todos los contratos de negocio.
+# Antes había dos `ShopScheduleOut` distintos (uno aquí y otro en
+# `shop_schedule.py`), lo que generaba respuestas inconsistentes.
+from app.models.shop_schedule import ShopScheduleOut  # noqa: F401
+
 
 class ShopRegister(BaseModel):
     nombre: str
@@ -13,7 +18,7 @@ class ShopEdit(BaseModel):
     descripcion: str
     imagen_negocio: Optional[str] = 'null'
     fk_categoria: int
-    
+
 class ShopOut(BaseModel):
     id: int
     nombre: str
@@ -21,17 +26,14 @@ class ShopOut(BaseModel):
     imagen_negocio: str
     categoria_negocio: str | int
     id_categoria: int
-    
+    # HU_12: el propietario necesita conocer el estado real devuelto por
+    # `negocios_view`. El default mantiene compatibilidad con vistas antiguas.
+    estado_negocio: bool = True
+
 class ShopContactOut(BaseModel):
     nombre_red: str
     url: str
-    
-class ShopScheduleOut(BaseModel):
-    id_horario: int
-    dia: str
-    hora_apertura: time
-    hora_cierre : time
-    
+
 class ShopAddressOut(BaseModel):
     id_direccion: int
     direccion_calle: str
@@ -50,6 +52,6 @@ class ShopFullProfileOut(BaseModel):
     contacto: list[ShopContactOut] = []
     horario: list[ShopScheduleOut] = []
     direccion: ShopAddressOut | None = None
-    
+
 class ShopStatusUpdate(BaseModel):
     estado_negocio: bool

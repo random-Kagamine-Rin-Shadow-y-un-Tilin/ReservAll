@@ -18,7 +18,29 @@ class Settings(BaseSettings):
     geocoding_url: str = "https://nominatim.openstreetmap.org"
     geocoding_user_agent: str = "ReservAll/1.0 (+https://github.com/random-Kagamine-Rin-Shadow-y-un-Tilin/ReservAll)"
     geocoding_timeout_seconds: float = 10.0
-    
+    # CORS y cookies. En producción configurar CORS_ORIGINS y COOKIE_SECURE=true.
+    cors_origins: str = "http://localhost:5173"
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
+    # Recuperación de contraseña (HU_03).
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_use_tls: bool = True
+    password_reset_code_ttl_minutes: int = 15
+    # Solo para desarrollo/local: devuelve el código en la respuesta.
+    password_reset_return_code: bool = False
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        ]
+
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env")
-        
+
 settings = Settings()

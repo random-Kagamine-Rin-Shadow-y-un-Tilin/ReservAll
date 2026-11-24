@@ -64,7 +64,9 @@ class AgendaDayOut(BaseModel):
     dia_semana: str
     abierto: bool
     bloqueado: bool
+    # `horario` se conserva por compatibilidad; `horarios` soporta turnos partidos.
     horario: Optional[ShopScheduleOut] = None
+    horarios: List[ShopScheduleOut] = Field(default_factory=list)
     reservas: List[OwnerReservationOut] = Field(default_factory=list)
     bloqueos: List[BlockOut] = Field(default_factory=list)
     disponibilidad: List[AgendaSlotOut] = Field(default_factory=list)

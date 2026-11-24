@@ -45,8 +45,7 @@ _RESERVATION_SELECT = """
 """
 
 
-async def get_reservations(
-    pool: asyncpg.Pool,
+def _reservation_filters(
     shop_id: int,
     fecha_desde: Optional[date] = None,
     fecha_hasta: Optional[date] = None,
@@ -56,7 +55,6 @@ async def get_reservations(
     search: Optional[str] = None,
     cliente_id: Optional[int] = None,
     reservation_id: Optional[int] = None,
-    limit: Optional[int] = None,
 ):
     conditions = ["s.negocio_id = $1"]
     params: List[object] = [shop_id]
@@ -86,19 +84,84 @@ async def get_reservations(
     if reservation_id is not None:
         add("r.id_reserva = ${n}", reservation_id)
 
+    return " WHERE " + " AND ".join(conditions), params
+
+
+async def get_reservations(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+    estados: Optional[List[str]] = None,
+    profesional_id: Optional[int] = None,
+    search: Optional[str] = None,
+    cliente_id: Optional[int] = None,
+    reservation_id: Optional[int] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+):
+    where, params = _reservation_filters(
+        shop_id,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=estado,
+        estados=estados,
+        profesional_id=profesional_id,
+        search=search,
+        cliente_id=cliente_id,
+        reservation_id=reservation_id,
+    )
     query = (
         _RESERVATION_SELECT
-        + " WHERE "
-        + " AND ".join(conditions)
-        + " ORDER BY r.fecha DESC, r.hora_inicio DESC"
+        + where
+        + " ORDER BY r.fecha DESC, r.hora_inicio DESC, r.id_reserva DESC"
     )
 
     if limit is not None:
         params.append(limit)
         query += f" LIMIT ${len(params)}"
+    if offset is not None and limit is not None:
+        params.append(offset)
+        query += f" OFFSET ${len(params)}"
 
     async with pool.acquire() as conn:
         return await conn.fetch(query, *params)
+
+
+async def count_reservations(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+    estados: Optional[List[str]] = None,
+    profesional_id: Optional[int] = None,
+    search: Optional[str] = None,
+    cliente_id: Optional[int] = None,
+    reservation_id: Optional[int] = None,
+) -> int:
+    where, params = _reservation_filters(
+        shop_id,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=estado,
+        estados=estados,
+        profesional_id=profesional_id,
+        search=search,
+        cliente_id=cliente_id,
+        reservation_id=reservation_id,
+    )
+    query = f"""
+        SELECT COUNT(*)::int AS total
+        FROM reservas AS r
+        INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
+        INNER JOIN usuarios AS u ON u.id = r.cliente_id
+        {where}
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(query, *params)
+    return int(row["total"])
 
 
 async def get_reservation(
@@ -239,8 +302,7 @@ _CLIENT_AGGREGATE = """
 """
 
 
-async def get_clients(
-    pool: asyncpg.Pool,
+def _client_filters(
     shop_id: int,
     search: Optional[str] = None,
     cliente_id: Optional[int] = None,
@@ -256,13 +318,57 @@ async def get_clients(
         params.append(cliente_id)
         conditions.append(f"u.id = ${len(params)}")
 
-    query = _CLIENT_AGGREGATE
-    if conditions:
-        query += " AND " + " AND ".join(conditions)
+    return (" AND " + " AND ".join(conditions) if conditions else ""), params
+
+
+async def get_clients(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    search: Optional[str] = None,
+    cliente_id: Optional[int] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+):
+    extra, params = _client_filters(shop_id, search=search, cliente_id=cliente_id)
+
+    query = _CLIENT_AGGREGATE + extra
     query += " GROUP BY u.id, u.nombre, u.correo ORDER BY ultima_reserva DESC, u.nombre"
+
+    if limit is not None:
+        params.append(limit)
+        query += f" LIMIT ${len(params)}"
+    if offset is not None and limit is not None:
+        params.append(offset)
+        query += f" OFFSET ${len(params)}"
 
     async with pool.acquire() as conn:
         return await conn.fetch(query, *params)
+
+
+async def count_clients(
+    pool: asyncpg.Pool,
+    shop_id: int,
+    search: Optional[str] = None,
+) -> int:
+    """Cuenta clientes distintos con reservas en el negocio."""
+
+    conditions = ["s.negocio_id = $1"]
+    params: List[object] = [shop_id]
+    if search:
+        params.append(f"%{search.strip()}%")
+        index = len(params)
+        conditions.append(f"(u.nombre ILIKE ${index} OR u.correo ILIKE ${index})")
+
+    query = f"""
+        SELECT COUNT(DISTINCT u.id)::int AS total
+        FROM reservas AS r
+        INNER JOIN servicios AS s ON s.id_servicio = r.servicio_id
+        INNER JOIN usuarios AS u ON u.id = r.cliente_id
+        WHERE {' AND '.join(conditions)}
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(query, *params)
+    return int(row["total"])
 
 
 async def get_client(

@@ -61,9 +61,11 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt ruff
       - name: Lint (errores graves)
-        run: ruff check --select=E9,F63,F7,F82 app
+        run: ruff check --select=E9,F63,F7,F82 app tests
       - name: Compilar
-        run: python -m compileall -q app
+        run: python -m compileall -q app tests
+      - name: Pruebas
+        run: python -m pytest -q
 
   web:
     name: Web negocio (React + Vite)

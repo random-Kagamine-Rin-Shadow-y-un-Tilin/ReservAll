@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from datetime import time, date, datetime
 from enum import Enum
@@ -14,7 +14,7 @@ class DiaSemana(str, Enum):
     VIERNES = "Viernes"
     SABADO = "Sábado"
     DOMINGO = "Domingo"
-    
+
 class EstadoReserva(str, Enum):
     PENDIENTE = "pendiente"
     CONFIRMADA = "confirmada"
@@ -46,6 +46,14 @@ class ShopView(BaseModel):
     disponible: Optional[bool] = None
 
 
+class ShopCatalogPage(BaseModel):
+    items: List[ShopView]
+    total: int
+    limit: int
+    offset: int
+    pages: int
+
+
 class ShopMapMarker(BaseModel):
     """Datos mínimos de un negocio para pintarlo como marcador en el mapa."""
 
@@ -68,6 +76,32 @@ class CategoryView(BaseModel):
     id_categoria: int
     nombre_categoria: str
     negocios_count: int = 0
+    descripcion: Optional[str] = None
+    estado: bool = True
+
+
+class CategoryCreate(BaseModel):
+    nombre_categoria: str = Field(..., min_length=2, max_length=100)
+    descripcion: Optional[str] = Field(None, max_length=500)
+    estado: bool = True
+
+
+class CategoryUpdate(BaseModel):
+    nombre_categoria: Optional[str] = Field(None, min_length=2, max_length=100)
+    # ``null`` explícito permite limpiar la descripción.
+    descripcion: Optional[str] = Field(None, max_length=500)
+    estado: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def hay_cambios(self):
+        enviados = self.model_fields_set
+        if not enviados.intersection({"nombre_categoria", "descripcion", "estado"}):
+            raise ValueError("No hay cambios para guardar.")
+        if "nombre_categoria" in enviados and self.nombre_categoria is None:
+            raise ValueError("El nombre de la categoría no puede ser nulo.")
+        if "estado" in enviados and self.estado is None:
+            raise ValueError("El estado de la categoría no puede ser nulo.")
+        return self
 
 
 class ShopAddressView(BaseModel):
@@ -90,6 +124,7 @@ class ShopScheduleView(BaseModel):
     hora_apertura: time
     hora_cierre: time
     hora_descanso: Optional[time] = None
+    descanso_duracion_min: int = 60
     estado_horario: Optional[bool] = True
 
 
@@ -117,7 +152,7 @@ class ShopSearchParams(BaseModel):
     orden: str = "relevancia"
     limit: int = 50
     offset: int = 0
-    
+
 class ShopSchedules(BaseModel):
     id: int
     dueno_id: int
@@ -148,7 +183,7 @@ class ReservationRequest(BaseModel):
     fecha: date
     servicio_id: Optional[int] = None
     hora_inicio: time
-    hora_fin: time 
+    hora_fin: time
 
 class AvailableTimesResponse(BaseModel):
     negocio_id: int
@@ -157,7 +192,7 @@ class AvailableTimesResponse(BaseModel):
     horarios_disponibles: List[AvailableTimes]
     bloqueado: bool = False
     motivo_bloqueo: Optional[str] = None
-    
+
 # Modelo para crear reserva (HU_43)
 class CreateReservationRequest(BaseModel):
     negocio_id: Optional[int] = Field(
@@ -202,6 +237,10 @@ class ClientReservationListOut(BaseModel):
     items: List[ClientReservationOut]
     total: int
     filtro: Optional[str] = None
+    # Metadatos de paginación (compatibles con versiones anteriores).
+    limit: int = 50
+    offset: int = 0
+    pages: int = 0
 
 # HU_46: cancelación por parte del cliente
 class ClientReservationCancel(BaseModel):

@@ -547,36 +547,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                   label: const Text("Ver en mapa"),
                 ),
               ),
-              if (currentShop.latitud != null &&
-                  currentShop.longitud != null) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: secondaryColor,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BusinessRouteMapScreen(
-                            businessName: currentShop.nombre,
-                            businessLat: currentShop.latitud!,
-                            businessLng: currentShop.longitud!,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.directions, size: 18),
-                    label: const Text("Cómo llegar"),
-                  ),
-                ),
-              ],
+
             ],
           ],
         ),
@@ -632,7 +603,11 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                         ),
                   trailing: Text(
                     "${_timeLabel(horario['hora_apertura'])} - ${_timeLabel(horario['hora_cierre'])}",
-                    style: TextStyle(color: textMainColor),
+                    style: TextStyle(
+                      color: textMainColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 );
               }).toList(),

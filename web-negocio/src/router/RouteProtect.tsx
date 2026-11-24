@@ -10,7 +10,7 @@ export function RouteProtect({
   requiredRol,
 }: {
   children: ReactNode;
-  requiredRol?: "cliente" | "negocio";
+  requiredRol?: "cliente" | "negocio" | "admin";
 }) {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();

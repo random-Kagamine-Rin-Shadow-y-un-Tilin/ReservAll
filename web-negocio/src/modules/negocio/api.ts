@@ -191,6 +191,8 @@ export async function createSchedule(
       hora_apertura: payload.hora_apertura,
       hora_cierre: payload.hora_cierre,
       hora_descanso: payload.hora_descanso ?? null,
+      descanso_duracion_min: payload.descanso_duracion_min ?? 60,
+      estado_horario: payload.estado_horario ?? true,
     },
     "No pudimos registrar el horario.",
   );

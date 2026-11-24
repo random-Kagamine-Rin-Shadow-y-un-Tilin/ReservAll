@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LuArrowRight,
   LuCircleAlert,
@@ -15,6 +15,8 @@ import { Field, Input } from "../../../shared/components/ui/Field";
 export function LoginForm() {
   const { login, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const resetMessage = (location.state as { message?: string } | null)?.message;
 
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
@@ -93,6 +95,21 @@ export function LoginForm() {
             </button>
           </div>
         </Field>
+
+        <div className="flex justify-end">
+          <Link
+            to="/forgot-password"
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
+
+        {resetMessage && !error && (
+          <div className="rounded-xl border border-success/20 bg-success-tint px-3.5 py-3 text-xs font-medium text-success">
+            {resetMessage}
+          </div>
+        )}
 
         {error && (
           <div className="flex items-start gap-2 rounded-xl border border-error/20 bg-error-tint px-3.5 py-3 text-xs font-medium text-error">

@@ -632,7 +632,11 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                         ),
                   trailing: Text(
                     "${_timeLabel(horario['hora_apertura'])} - ${_timeLabel(horario['hora_cierre'])}",
-                    style: TextStyle(color: textMainColor),
+                    style: TextStyle(
+                      color: textMainColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 );
               }).toList(),

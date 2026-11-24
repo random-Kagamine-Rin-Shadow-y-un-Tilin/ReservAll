@@ -36,6 +36,10 @@ export function LoginForm() {
     setLoading(true);
     try {
       const userLogin = await login({ correo: correo.trim(), password });
+      if (userLogin.rol === "admin") {
+        navigate("/admin/categorias", { replace: true });
+        return;
+      }
       if (userLogin.rol !== "negocio") {
         await logout();
         setError("Esta cuenta no tiene acceso al panel de negocio.");

@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../models/shop.dart';
-import '../../services/api_service.dart';
+import '/models/shop.dart';
+import '/services/api_service.dart';
 import '/screens/business/business_map_screen.dart';
 
 class BookingListScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class _BookingListScreenState extends State<BookingListScreen> {
   bool isLoading = true;
   List<dynamic> reservations = [];
   String selectedFilter = 'Todas';
-  String currentUserName = 'Cliente';
+  String currentUserName = 'Cliente (cuenta actual)';
 
   final Color primaryColor = const Color(0xFFE2725B);
   final Color secondaryColor = const Color(0xFF2A9D8F);
@@ -65,7 +66,7 @@ class _BookingListScreenState extends State<BookingListScreen> {
     return null;
   }
 
-  Future <void> _loadCurrentUserName() async {
+  Future<void> _loadCurrentUserName() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final directKeys = [
@@ -126,104 +127,50 @@ class _BookingListScreenState extends State<BookingListScreen> {
     return fallback;
   }
 
-  String? _formatAddress(dynamic rawAddress) {
-    if (rawAddress == null) return null;
-    if (rawAddress is List && rawAddress.isNotEmpty) {
-      return _formatAddress(rawAddress.first);
-    }
-    if (rawAddress is String) {
-      final trimmed = rawAddress.trim();
-      if (trimmed.isEmpty || trimmed.toLowerCase() == 'null') return null;
-      return trimmed;
-    }
-    if (rawAddress is Map) {
-      final map = Map<String, dynamic>.from(rawAddress);
-      final direct = _formatAddress(
-        map['direccion_completa'] ??
-            map['formatted_address'] ??
-            map['direccion'] ??
-            map['direcciones_negocio'],
-      );
-      if (direct != null) return direct;
+  dynamic _extractReservationId(Map<dynamic, dynamic> res) {
+    return res['id_reserva'] ??
+        res['id'] ??
+        res['reserva_id'] ??
+        res['booking_id'];
+  }
 
-      final street = [
-        map['direccion_calle'] ?? map['calle'] ?? map['street'],
-        map['numero_local'] ?? map['numero_exterior'] ?? map['numero'],
-        map['numero_interior'] ?? map['interior'],
-      ]
-          .where((v) => v != null && v.toString().trim().isNotEmpty)
-          .map((v) => v.toString().trim())
-          .join(' ');
+  dynamic _extractBusinessId(Map<dynamic, dynamic> res) {
+    final negocioObj = res['negocio'] is Map
+        ? Map<String, dynamic>.from(res['negocio'] as Map)
+        : const <String, dynamic>{};
+    return res['negocio_id'] ??
+        res['id_negocio'] ??
+        negocioObj['id_negocio'] ??
+        negocioObj['id'] ??
+        negocioObj['business_id'];
+  }
 
-      final colonia = map['colonia']?.toString().trim();
-      final city = map['ciudad']?.toString().trim();
-      final state = map['estado']?.toString().trim();
-      final postalCode =
-          (map['codigo_postal'] ?? map['cp'])?.toString().trim();
+  Future<List<dynamic>> _requestReservationsList() async {
+    final headers = await _getAuthHeaders();
+    final response = await http.get(
+      Uri.parse("$baseUrl/client/reservations"),
+      headers: headers,
+    );
 
-      final parts = <String>[];
-      if (street.isNotEmpty) parts.add(street);
-      if (colonia != null && colonia.isNotEmpty) parts.add(colonia);
-      if (city != null && city.isNotEmpty) parts.add(city);
-      if (state != null && state.isNotEmpty) parts.add(state);
-      if (postalCode != null && postalCode.isNotEmpty) {
-        parts.add("C.P. $postalCode");
+    if (response.statusCode == 200) {
+      debugPrint("RESERVAS_JSON: ${response.body}");
+      final data = jsonDecode(response.body);
+      if (data is List) return data;
+      if (data is Map) {
+        final list =
+            data['reservas'] ?? data['reservations'] ?? data['items'] ?? [];
+        if (list is List) return list;
       }
-
-      if (parts.isNotEmpty) return parts.join(', ');
-    }
-    return null;
-  }
-
-  String? _resolveShopAddress(Map<String, dynamic> source) {
-    final negocioMap = source['negocio'] is Map
-        ? Map<String, dynamic>.from(source['negocio'] as Map)
-        : <String, dynamic>{};
-    final shopMap = source['shop'] is Map
-        ? Map<String, dynamic>.from(source['shop'] as Map)
-        : <String, dynamic>{};
-    final dataMap = source['data'] is Map
-        ? Map<String, dynamic>.from(source['data'] as Map)
-        : <String, dynamic>{};
-
-    final candidates = [
-      source['direcciones_negocio'],
-      source['direccion'],
-      source['ubicacion'],
-      source['direccion_negocio'],
-      source['address'],
-      source['direccion_obj'],
-      negocioMap['direcciones_negocio'],
-      negocioMap['direccion'],
-      negocioMap['ubicacion'],
-      negocioMap['direccion_obj'],
-      shopMap['direcciones_negocio'],
-      shopMap['direccion'],
-      shopMap['ubicacion'],
-      dataMap['direcciones_negocio'],
-      dataMap['direccion'],
-      dataMap['ubicacion'],
-    ];
-
-    for (final candidate in candidates) {
-      final formatted = _formatAddress(candidate);
-      if (formatted != null) return formatted;
+      return const [];
     }
 
-    return _formatAddress(source);
-  }
-
-  String? _resolveImageUrl(dynamic rawImage) {
-    if (rawImage == null) return null;
-    final img = rawImage.toString().trim();
-    if (img.isEmpty || img.toLowerCase() == 'null') return null;
-    if (img.startsWith('http://') || img.startsWith('https://')) {
-      return img;
-    }
-    if (img.startsWith('/')) {
-      return "$baseUrl$img";
-    }
-    return "$baseUrl/static/$img";
+    final detail = _extractErrorDetail(
+      response.body,
+      (response.statusCode == 401 || response.statusCode == 403)
+          ? 'No tienes permiso para consultar estas reservas.'
+          : 'No se pudieron cargar las reservas',
+    );
+    throw Exception(detail);
   }
 
   Future<void> _fetchReservations() async {
@@ -231,612 +178,580 @@ class _BookingListScreenState extends State<BookingListScreen> {
     setState(() => isLoading = true);
 
     try {
-      final headers = await _getAuthHeaders();
-      final response = await http.get(
-        Uri.parse("$baseUrl/client/reservations"),
-        headers: headers,
-      );
-
+      final parsedList = await _requestReservationsList();
       if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          if (data is List) {
-            reservations = data;
-          } else if (data is Map) {
-            reservations =
-                data['reservas'] ?? data['reservations'] ?? data['items'] ?? [];
-          }
-          isLoading = false;
-        });
-      } else {
-        setState(() => isLoading = false);
-        final detail = _extractErrorDetail(
-          response.body,
-          (response.statusCode == 401 || response.statusCode == 403)
-              ? 'No tienes permiso para consultar estas reservas.'
-              : 'No se pudieron cargar las reservas',
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error: $detail"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (_) {
+      setState(() {
+        reservations = parsedList;
+        isLoading = false;
+      });
+    } catch (e) {
       if (!mounted) return;
       setState(() => isLoading = false);
+      final msg = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Error de conexión con el servidor."),
+        SnackBar(
+          content: Text(
+            msg.isNotEmpty ? "Error: $msg" : "Error de conexión con el servidor.",
+          ),
           backgroundColor: Colors.red,
         ),
       );
     }
   }
 
-  Future<void> _cancelReservation(dynamic reservationId) async {
+  Future<Map<String, dynamic>?> _fetchSingleReservationFromSupabase(
+    dynamic reservationId,
+  ) async {
+    if (reservationId == null) return null;
+    final list = await _requestReservationsList();
+    final targetId = reservationId.toString().trim();
+    for (final raw in list) {
+      if (raw is Map) {
+        final map = Map<String, dynamic>.from(raw);
+        final id = _extractReservationId(map)?.toString().trim();
+        if (id == targetId) {
+          return map;
+        }
+      }
+    }
+    return null;
+  }
+
+  Future<bool> _cancelReservationById(dynamic reservationId) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.patch(
-        Uri.parse("$baseUrl/client/reservations/$reservationId/cancel"),
+        Uri.parse('$baseUrl/client/reservations/$reservationId/cancel'),
         headers: headers,
       );
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
       if (response.statusCode == 200 || response.statusCode == 204) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Reserva cancelada correctamente."),
+            content: Text('Reserva cancelada correctamente.'),
             backgroundColor: Colors.green,
           ),
         );
-        _fetchReservations();
+        return true;
       } else {
         final detail = _extractErrorDetail(
           response.body,
-          (response.statusCode == 401 || response.statusCode == 403)
-              ? 'Solo el usuario propietario de la reserva puede modificarla.'
-              : 'No se pudo cancelar',
+          'No se pudo cancelar la reserva.',
         );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Error: $detail"),
+            content: Text('Error: $detail'),
             backgroundColor: Colors.red,
           ),
         );
+        return false;
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Error de conexión al cancelar."),
+          content: Text('Error de conexión al cancelar.'),
           backgroundColor: Colors.red,
         ),
       );
+      return false;
     }
   }
 
-  String _resolveClientName(Map<String, dynamic> res) {
-    final clienteObj = res['cliente'] is Map
-        ? Map<String, dynamic>.from(res['cliente'] as Map)
-        : <String, dynamic>{};
-    final usuarioObj = res['usuario'] is Map
-        ? Map<String, dynamic>.from(res['usuario'] as Map)
-        : <String, dynamic>{};
-
-    final fromReservation = _extractNameFromJson(res['cliente_nombre']) ??
-        _extractNameFromJson(res['nombre_cliente']) ??
-        _extractNameFromJson(res['usuario_nombre']) ??
-        _extractNameFromJson(clienteObj) ??
-        _extractNameFromJson(usuarioObj) ??
-        (res['cliente'] is String ? _extractNameFromJson(res['cliente']) : null);
-
-    if (fromReservation != null && fromReservation.isNotEmpty) {
-      return fromReservation;
+  String _getImageUrl(dynamic rawImage) {
+    if (rawImage == null) return '';
+    final img = rawImage.toString().trim();
+    if (img.isEmpty || img == 'null') return '';
+    if (img.startsWith("http://") || img.startsWith("https://")) {
+      return img;
     }
-
-    if (currentUserName.trim().isNotEmpty) {
-      return currentUserName.trim();
+    if (img.startsWith("/")) {
+      return "$baseUrl$img";
     }
-
-    return 'Cliente';
+    return "$baseUrl/static/$img";
   }
 
-  Shop? _buildTargetShop({
-    required dynamic negocioId,
-    required String nombreNegocio,
-    String? direccionNegocio,
-    String? imagenNegocio,
-    Shop? fetchedShop,
-    Map<String, dynamic>? shopRawData,
-  }) {
-    if (fetchedShop != null) return fetchedShop;
-    if (negocioId == null && shopRawData == null) return null;
+  String? _buildAddressFromShopDetail(ShopDetail? shopDetail, Shop? resolvedShop) {
+    final address = shopDetail?.direccion;
+    if (address == null) {
+      final raw = resolvedShop?.direccion?.trim() ?? '';
+      return raw.isEmpty ? null : raw;
+    }
 
-    final baseMap = <String, dynamic>{
-      if (shopRawData != null) ...shopRawData,
-      'id': shopRawData?['id'] ?? shopRawData?['id_negocio'] ?? negocioId,
-      'id_negocio':
-          shopRawData?['id_negocio'] ?? shopRawData?['id'] ?? negocioId,
-      'nombre': nombreNegocio,
-      if (direccionNegocio != null &&
-          direccionNegocio != "Ubicación no especificada" &&
-          direccionNegocio != "Cargando ubicación...")
-        'direccion': direccionNegocio,
-      if (imagenNegocio != null && imagenNegocio.isNotEmpty)
-        'imagenNegocio': imagenNegocio,
+    final street = [
+      address['direccion_calle'],
+      address['numero_local'],
+      address['numero_interior'],
+    ]
+        .where((value) => value != null && value.toString().trim().isNotEmpty)
+        .join(' ');
+    final city = address['ciudad'];
+    final state = address['estado'];
+
+    final parts = <String>[];
+    if (street.isNotEmpty) parts.add(street);
+    if (city != null && city.toString().trim().isNotEmpty) {
+      parts.add(city.toString());
+    }
+    if (state != null && state.toString().trim().isNotEmpty) {
+      parts.add(state.toString());
+    }
+
+    if (parts.isNotEmpty) return parts.join(', ');
+    final fallbackRaw = resolvedShop?.direccion?.trim() ?? '';
+    return fallbackRaw.isEmpty ? null : fallbackRaw;
+  }
+
+  Shop? _buildFallbackShop(
+    Map<String, dynamic> detailData,
+    dynamic bizId,
+    String businessName,
+    String? addressText,
+    String imageUrl,
+  ) {
+    final negocioObj = detailData['negocio'] is Map
+        ? Map<String, dynamic>.from(detailData['negocio'] as Map)
+        : const <String, dynamic>{};
+
+    if (bizId == null && businessName.trim().isEmpty && negocioObj.isEmpty) {
+      return null;
+    }
+
+    final map = <String, dynamic>{
+      ...negocioObj,
+      if (bizId != null) 'id': negocioObj['id'] ?? bizId,
+      if (bizId != null) 'id_negocio': negocioObj['id_negocio'] ?? bizId,
+      if (businessName.trim().isNotEmpty) 'nombre': businessName.trim(),
+      if (addressText != null && addressText.isNotEmpty) 'direccion': addressText,
+      if (imageUrl.isNotEmpty) 'imagenNegocio': imageUrl,
     };
 
-    return Shop.fromJson(baseMap);
+    return Shop.fromJson(map);
   }
 
-  void _openBusinessDetail({
-    required dynamic negocioId,
-    required String nombreNegocio,
-    String? direccionNegocio,
-    String? imagenNegocio,
-    Shop? fetchedShop,
-    Map<String, dynamic>? shopRawData,
-  }) {
-    final targetShop = _buildTargetShop(
-      negocioId: negocioId,
-      nombreNegocio: nombreNegocio,
-      direccionNegocio: direccionNegocio,
-      imagenNegocio: imagenNegocio,
-      fetchedShop: fetchedShop,
-      shopRawData: shopRawData,
-    );
-    if (targetShop == null) return;
-
-    Navigator.pushNamed(
-      context,
-      '/businessDetail',
-      arguments: targetShop,
-    );
-  }
-
-  void _openBusinessMap({
-    required Shop? targetShop,
-    required String direccionNegocio,
-  }) {
-    if (targetShop == null || !targetShop.hasCoordinates) return;
-
-    final formattedAddress = (direccionNegocio != "Ubicación no especificada" &&
-            direccionNegocio != "Cargando ubicación...")
-        ? direccionNegocio
-        : targetShop.direccion;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => BusinessMapScreen(
-          shop: targetShop,
-          formattedAddress: formattedAddress,
-        ),
-      ),
-    );
-  }
-
-  void _showReservationDetail(Map<String, dynamic> res) {
-    final id = res['id_reserva'] ?? res['id'];
-
-    final negocioObj = res['negocio'] is Map
-        ? Map<String, dynamic>.from(res['negocio'] as Map)
-        : <String, dynamic>{};
-
-    final dynamic negocioId =
-        res['negocio_id'] ??
-        res['id_negocio'] ??
-        negocioObj['id'] ??
-        negocioObj['id_negocio'] ??
-        res['id_shop'] ??
-        res['shop_id'];
-
-    final String initialNegocioName = (res['negocio_nombre'] ??
-            negocioObj['nombre'] ??
-            negocioObj['name'] ??
-            'Negocio')
-        .toString();
-
-    final servicioObj = res['servicio'] is Map
-        ? Map<String, dynamic>.from(res['servicio'] as Map)
-        : <String, dynamic>{};
-
-    final servicio = (res['servicio_nombre'] ??
-            servicioObj['nombre'] ??
-            servicioObj['name'] ??
-            'Servicio agendado')
-        .toString();
-
-    final cliente = _resolveClientName(res);
-    final fecha = res['fecha']?.toString() ?? '';
-    final horaRaw =
-        res['hora_inicio']?.toString() ?? res['hora']?.toString() ?? '';
-    final hora = horaRaw.length >= 5 ? horaRaw.substring(0, 5) : horaRaw;
-
-    final estado = (res['estado'] ?? 'Pendiente').toString();
-    final comentarioRaw = res['comentario']?.toString().trim() ?? '';
-    final comentario =
-        comentarioRaw.isEmpty ? 'Sin comentarios adicionales' : comentarioRaw;
-
-    final bool canCancel =
-        estado.toLowerCase() == 'pendiente' ||
-        estado.toLowerCase() == 'confirmada';
-
-    final initialAddress = _resolveShopAddress(res);
-
-    String nombreNegocio = initialNegocioName;
-    String? imagenNegocio = _resolveImageUrl(
-      res['imagen'] ?? negocioObj['imagenNegocio'] ?? negocioObj['imagen'],
-    );
-    String direccionNegocio = initialAddress ??
-        (negocioId != null
-            ? "Cargando ubicación..."
-            : "Ubicación no especificada");
-    String descripcionNegocio = "";
-    Shop? fetchedShop;
-    Map<String, dynamic>? fetchedShopMap;
-    bool isLoadingShopData = negocioId != null;
-    bool shopDataRequested = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: surfaceColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (modalContext) => StatefulBuilder(
-        builder: (context, setModalState) {
-          Future<void> fetchShopInfo() async {
-            if (negocioId == null) {
-              if (!context.mounted) return;
-              setModalState(() {
-                direccionNegocio =
-                    initialAddress ?? "Ubicación no especificada";
-                isLoadingShopData = false;
-              });
-              return;
-            }
-
-            try {
-              final shopDetail = await fetchShopDetail(negocioId);
-              if (!context.mounted) return;
-
-              final resolvedShop = shopDetail.resolvedShop;
-              final formattedDetailAddress =
-                  _formatAddress(shopDetail.direccion);
-              final extraMap = <String, dynamic>{
-                if (shopDetail.direccion != null)
-                  'direccion': shopDetail.direccion,
-              };
-              final shopLocation =
-                  resolvedShop.direccion?.trim().isNotEmpty == true
-                      ? resolvedShop.direccion!.trim()
-                      : (formattedDetailAddress ??
-                          (resolvedShop.ciudad?.trim().isNotEmpty == true
-                              ? resolvedShop.ciudad!.trim()
-                              : (_resolveShopAddress(extraMap) ??
-                                  initialAddress)));
-
-              setModalState(() {
-                fetchedShop = resolvedShop;
-                fetchedShopMap = extraMap.isNotEmpty ? extraMap : null;
-                nombreNegocio = resolvedShop.nombre.trim().isNotEmpty
-                    ? resolvedShop.nombre.trim()
-                    : initialNegocioName;
-                imagenNegocio =
-                    _resolveImageUrl(resolvedShop.imagenNegocio) ??
-                        imagenNegocio;
-                direccionNegocio = shopLocation ?? "Ubicación no especificada";
-                if (resolvedShop.descripcion.trim().isNotEmpty) {
-                  descripcionNegocio = resolvedShop.descripcion.trim();
-                }
-                isLoadingShopData = false;
-              });
-            } catch (_) {
-              if (!context.mounted) return;
-              setModalState(() {
-                direccionNegocio =
-                    initialAddress ?? "Ubicación no especificada";
-                isLoadingShopData = false;
-              });
-            }
-          }
-
-          if (!shopDataRequested && isLoadingShopData) {
-            shopDataRequested = true;
-            Future.microtask(fetchShopInfo);
-          }
-
-          final currentTargetShop = _buildTargetShop(
-            negocioId: negocioId,
-            nombreNegocio: nombreNegocio,
-            direccionNegocio: direccionNegocio,
-            imagenNegocio: imagenNegocio,
-            fetchedShop: fetchedShop,
-            shopRawData:
-                fetchedShopMap ?? (negocioObj.isNotEmpty ? negocioObj : null),
-          );
-
-          return Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Detalle de Reserva",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: textMainColor,
-                        ),
-                      ),
-                      _buildStatusBadge(estado),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child:
-                            (imagenNegocio != null && imagenNegocio!.isNotEmpty)
-                                ? Image.network(
-                                    imagenNegocio!,
-                                    width: 65,
-                                    height: 65,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) =>
-                                        _placeholderImage(),
-                                  )
-                                : _placeholderImage(),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              nombreNegocio,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: textMainColor,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            isLoadingShopData
-                                ? Row(
-                                    children: [
-                                      SizedBox(
-                                        height: 12,
-                                        width: 12,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: primaryColor,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        "Cargando ubicación...",
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: textSecondaryColor,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : Row(
-                                    children: [
-                                      Icon(
-                                        Icons.location_on,
-                                        size: 14,
-                                        color: primaryColor,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Expanded(
-                                        child: Text(
-                                          direccionNegocio,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: textSecondaryColor,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (descripcionNegocio.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      descripcionNegocio,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: textSecondaryColor,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  _detailRow(Icons.person_outline, "Cliente", cliente),
-                  _detailRow(Icons.storefront, "Negocio", nombreNegocio),
-                  _detailRow(Icons.cut, "Servicio", servicio),
-                  _detailRow(Icons.calendar_today, "Fecha", fecha),
-                  _detailRow(Icons.access_time, "Hora", hora),
-                  _detailRow(Icons.info_outline, "Estado", estado),
-                  _detailRow(Icons.comment, "Comentarios", comentario),
-                  const SizedBox(height: 16),
-                  if (currentTargetShop != null)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: secondaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: const Icon(Icons.storefront_outlined),
-                        label: const Text(
-                          "Ver negocio",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(modalContext);
-                          _openBusinessDetail(
-                            negocioId: negocioId,
-                            nombreNegocio: nombreNegocio,
-                            direccionNegocio: direccionNegocio,
-                            imagenNegocio: imagenNegocio,
-                            fetchedShop: currentTargetShop,
-                            shopRawData: fetchedShopMap ??
-                                (negocioObj.isNotEmpty ? negocioObj : null),
-                          );
-                        },
-                      ),
-                    ),
-                  if (currentTargetShop != null &&
-                      currentTargetShop.hasCoordinates) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: primaryColor,
-                          side: BorderSide(color: primaryColor),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: const Icon(Icons.map_outlined),
-                        label: const Text(
-                          "Ver en mapa",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(modalContext);
-                          _openBusinessMap(
-                            targetShop: currentTargetShop,
-                            direccionNegocio: direccionNegocio,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                  if (canCancel && id != null) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: const Icon(Icons.cancel_outlined),
-                        label: const Text(
-                          "Cancelar Reserva",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(modalContext);
-                          _confirmCancelDialog(id);
-                        },
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _confirmCancelDialog(dynamic reservationId) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text("¿Cancelar reserva?"),
-        content: const Text(
-          "Esta acción liberará el horario seleccionado y no se puede deshacer.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("Volver"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _cancelReservation(reservationId);
-            },
-            child: const Text(
-              "Sí, cancelar",
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _placeholderImage() {
+  Widget _modalFallbackIcon() {
     return Container(
-      width: 65,
-      height: 65,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
-        color: secondaryColor.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(10),
+        color: secondaryColor.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(Icons.store, color: secondaryColor, size: 30),
+      child: Icon(
+        Icons.storefront_outlined,
+        color: secondaryColor,
+        size: 28,
+      ),
     );
   }
 
-  Widget _detailRow(IconData icon, String label, String value) {
+  Widget _modalInfoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: secondaryColor),
+          Icon(icon, size: 18, color: secondaryColor),
           const SizedBox(width: 12),
           Text(
-            "$label: ",
-            style: TextStyle(fontWeight: FontWeight.bold, color: textMainColor),
+            '$label: ',
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: textMainColor,
+            ),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(color: textSecondaryColor)),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13.5,
+                color: textSecondaryColor,
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _openReservationDetail(Map<String, dynamic> initialItem) async {
+    final resId = _extractReservationId(initialItem);
+
+    final wasUpdated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        Map<String, dynamic> detailData = Map<String, dynamic>.from(initialItem);
+        ShopDetail? shopDetail;
+        Shop? resolvedShop;
+        bool loadingFresh = true;
+        bool cancelling = false;
+        bool fetchedOnce = false;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            if (!fetchedOnce) {
+              fetchedOnce = true;
+              Future<void> loadAllData() async {
+                Map<String, dynamic>? freshRes;
+                if (resId != null) {
+                  try {
+                    freshRes = await _fetchSingleReservationFromSupabase(resId);
+                  } catch (_) {}
+                }
+
+                final mergedRes = <String, dynamic>{
+                  ...detailData,
+                  if (freshRes != null) ...freshRes,
+                };
+
+                final bizId = _extractBusinessId(mergedRes);
+                ShopDetail? fetchedDetail;
+                Shop? fetchedShop;
+
+                if (bizId != null) {
+                  try {
+                    fetchedDetail = await fetchShopDetail(bizId);
+                    fetchedShop = fetchedDetail.resolvedShop;
+                  } catch (_) {}
+                }
+
+                if (!context.mounted) return;
+                setModalState(() {
+                  detailData = mergedRes;
+                  if (fetchedDetail != null) {
+                    shopDetail = fetchedDetail;
+                    resolvedShop = fetchedShop;
+                  }
+                  loadingFresh = false;
+                });
+              }
+
+              loadAllData();
+            }
+
+            final negocioObj = detailData['negocio'] is Map
+                ? Map<String, dynamic>.from(detailData['negocio'] as Map)
+                : const <String, dynamic>{};
+            final servicioObj = detailData['servicio'] is Map
+                ? Map<String, dynamic>.from(detailData['servicio'] as Map)
+                : const <String, dynamic>{};
+
+            final bizId = _extractBusinessId(detailData);
+            final business = (resolvedShop?.nombre.trim().isNotEmpty == true
+                    ? resolvedShop!.nombre
+                    : (detailData['negocio_nombre'] ??
+                            negocioObj['nombre'] ??
+                            negocioObj['name'] ??
+                            'Negocio'))
+                .toString();
+            final service = (detailData['servicio_nombre'] ??
+                    servicioObj['nombre'] ??
+                    servicioObj['name'] ??
+                    'Servicio')
+                .toString();
+            final clientName = (detailData['cliente_nombre'] ??
+                    detailData['usuario_nombre'] ??
+                    currentUserName)
+                .toString();
+
+            final addressText =
+                _buildAddressFromShopDetail(shopDetail, resolvedShop);
+            final address = addressText ?? 'Ubicación no especificada';
+
+            final imageUrl = _getImageUrl(
+              resolvedShop?.imagenNegocio ??
+                  detailData['imagen'] ??
+                  negocioObj['imagenNegocio'] ??
+                  negocioObj['imagen'],
+            );
+
+            final shopForNavigation = resolvedShop ??
+                _buildFallbackShop(
+                  detailData,
+                  bizId,
+                  business,
+                  addressText,
+                  imageUrl,
+                );
+
+            final date = (detailData['fecha'] ??
+                    detailData['fecha_reserva'] ??
+                    detailData['fecha_cita'] ??
+                    '')
+                .toString();
+            final timeRaw = (detailData['hora_inicio'] ??
+                    detailData['hora'] ??
+                    '')
+                .toString();
+            final time =
+                timeRaw.length >= 5 ? timeRaw.substring(0, 5) : timeRaw;
+            final status = (detailData['estado'] ?? 'pendiente').toString();
+            final commentRaw = detailData['comentario']?.toString().trim() ?? '';
+            final comment =
+                commentRaw.isEmpty ? 'Sin comentarios adicionales' : commentRaw;
+
+            final canCancel = status.toLowerCase() == 'pendiente' ||
+                status.toLowerCase() == 'confirmada';
+            final canShowRoute =
+                shopForNavigation != null && shopForNavigation.hasCoordinates;
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  18,
+                  20,
+                  20 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Detalle de Reserva',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: textMainColor,
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (loadingFresh) ...[
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: secondaryColor,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            _buildStatusBadge(status),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: imageUrl.isNotEmpty
+                              ? Image.network(
+                                  imageUrl,
+                                  width: 56,
+                                  height: 56,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) =>
+                                      _modalFallbackIcon(),
+                                )
+                              : _modalFallbackIcon(),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                business,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: textMainColor,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    size: 14,
+                                    color: primaryColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      address,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: textSecondaryColor,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _modalInfoRow(
+                      Icons.person_outline,
+                      'Cliente',
+                      clientName,
+                    ),
+                    _modalInfoRow(
+                      Icons.storefront_outlined,
+                      'Negocio',
+                      business,
+                    ),
+                    _modalInfoRow(
+                      Icons.content_cut,
+                      'Servicio',
+                      service,
+                    ),
+                    _modalInfoRow(
+                      Icons.calendar_today_outlined,
+                      'Fecha',
+                      date,
+                    ),
+                    _modalInfoRow(
+                      Icons.access_time,
+                      'Hora',
+                      time,
+                    ),
+                    _modalInfoRow(
+                      Icons.info_outline,
+                      'Estado',
+                      status.toLowerCase(),
+                    ),
+                    _modalInfoRow(
+                      Icons.notes,
+                      'Comentarios',
+                      comment,
+                    ),
+                    if (shopForNavigation != null) ...[
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primaryColor,
+                            side: BorderSide(color: primaryColor),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.storefront_outlined, size: 18),
+                          label: const Text(
+                            'Ver negocio',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(sheetContext, false);
+                            Navigator.pushNamed(
+                              context,
+                              '/businessDetail',
+                              arguments: shopForNavigation,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    if (canShowRoute) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: secondaryColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.route, size: 18),
+                          label: const Text(
+                            'Ver ruta al negocio',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(sheetContext, false);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BusinessMapScreen(
+                                  shop: shopForNavigation,
+                                  formattedAddress: addressText,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    if (canCancel && resId != null) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red.shade700,
+                            side: BorderSide(color: Colors.red.shade300),
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: cancelling
+                              ? SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.red.shade700,
+                                  ),
+                                )
+                              : const Icon(Icons.cancel_outlined, size: 18),
+                          label: Text(
+                            cancelling ? 'Cancelando...' : 'Cancelar Reserva',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: cancelling
+                              ? null
+                              : () async {
+                                  setModalState(() => cancelling = true);
+                                  final ok = await _cancelReservationById(resId);
+                                  if (!context.mounted) return;
+                                  setModalState(() => cancelling = false);
+                                  if (ok) {
+                                    Navigator.pop(sheetContext, true);
+                                  }
+                                },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (wasUpdated == true && mounted) {
+      _fetchReservations();
+    }
   }
 
   Widget _buildStatusBadge(String estado) {
@@ -844,7 +759,10 @@ class _BookingListScreenState extends State<BookingListScreen> {
     Color txtColor = Colors.orange.shade900;
 
     final lower = estado.toLowerCase();
-    if (lower == 'confirmada' || lower == 'completada') {
+    if (lower == 'confirmada' ||
+        lower == 'completada' ||
+        lower == 'finalizada' ||
+        lower == 'realizada') {
       bgColor = Colors.green.shade100;
       txtColor = Colors.green.shade900;
     } else if (lower == 'cancelada') {
@@ -869,14 +787,47 @@ class _BookingListScreenState extends State<BookingListScreen> {
     );
   }
 
+  Widget _buildTopBanner(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      color: primaryColor,
+      padding: EdgeInsets.fromLTRB(20, topInset + 10, 16, 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            "Mis Reservas",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          IconButton(
+            tooltip: "Favoritos",
+            onPressed: () => Navigator.pushNamed(context, '/favorites'),
+            icon: const Icon(
+              Icons.favorite,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<dynamic> get _filteredReservations {
     if (selectedFilter == 'Todas') return reservations;
     return reservations.where((r) {
+      if (r is! Map) return false;
       final estado = (r['estado'] ?? '').toString().toLowerCase();
       if (selectedFilter == 'Próximas') {
         return estado == 'pendiente' || estado == 'confirmada';
       }
-      return estado == 'cancelada' || estado == 'completada';
+      return estado == 'cancelada';
     }).toList();
   }
 
@@ -886,29 +837,35 @@ class _BookingListScreenState extends State<BookingListScreen> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: const Text(
-          "Mis Reservas",
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: primaryColor,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          _buildTopBanner(context),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
             child: Row(
               children: ['Todas', 'Próximas', 'Canceladas'].map((filter) {
                 final isSelected = selectedFilter == filter;
                 return Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.only(right: 10),
                   child: ChoiceChip(
                     label: Text(filter),
                     selected: isSelected,
                     selectedColor: secondaryColor,
+                    backgroundColor: surfaceColor,
+                    showCheckmark: isSelected,
+                    checkmarkColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: isSelected
+                            ? secondaryColor
+                            : Colors.grey.shade300,
+                      ),
+                    ),
                     labelStyle: TextStyle(
                       color: isSelected ? Colors.white : textMainColor,
+                      fontWeight: FontWeight.w500,
                     ),
                     onSelected: (_) => setState(() => selectedFilter = filter),
                   ),
@@ -975,7 +932,7 @@ class _BookingListScreenState extends State<BookingListScreen> {
                               ),
                               child: ListTile(
                                 contentPadding: const EdgeInsets.all(16),
-                                onTap: () => _showReservationDetail(item),
+                                onTap: () => _openReservationDetail(item),
                                 title: Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,

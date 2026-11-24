@@ -23,7 +23,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
 
   DateTime selectedDate = DateTime.now();
   String? selectedTime;
-  List<dynamic> availableTimes = [];
+  List<String> availableTimes = [];
 
   final TextEditingController commentController = TextEditingController();
 
@@ -67,9 +67,153 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
     }
   }
 
+  int get _totalSelectedDurationMinutes {
+    final servicios = detail?.servicios ?? [];
+    int total = 0;
+    for (final raw in servicios) {
+      if (raw is! Map) continue;
+      final sId =
+          int.tryParse((raw['id_servicio'] ?? raw['id'] ?? '0').toString()) ??
+          0;
+      if (selectedServiceIds.contains(sId)) {
+        final dur =
+            int.tryParse(
+              (raw['duracion_minutos'] ?? raw['duracion'] ?? '30').toString(),
+            ) ??
+            30;
+        total += dur;
+      }
+    }
+    return total > 0 ? total : 30;
+  }
+
+  int? _timeToMinutes(String hhmm) {
+    final clean = hhmm.trim();
+    if (clean.isEmpty) return null;
+    final parts = clean.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return h * 60 + m;
+  }
+
+  String _dayNameSpanish(DateTime date) {
+    const days = [
+      'lunes',
+      'martes',
+      'miercoles',
+      'jueves',
+      'viernes',
+      'sabado',
+      'domingo',
+    ];
+    return days[date.weekday - 1];
+  }
+
+  String _normalizeDay(String text) {
+    return text
+        .trim()
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u');
+  }
+
+  List<String> _filterValidSlotsForSelectedServices(List<String> rawSlots) {
+    final totalDuration = _totalSelectedDurationMinutes;
+    final targetDay = _dayNameSpanish(selectedDate);
+    final horarios = detail?.horarios ?? [];
+
+    Map<String, dynamic>? daySchedule;
+    for (final h in horarios) {
+      if (h is Map && _normalizeDay(h['dia']?.toString() ?? '') == targetDay) {
+        daySchedule = Map<String, dynamic>.from(h);
+        break;
+      }
+    }
+
+    int? closeMinutes;
+    if (daySchedule != null && daySchedule['hora_cierre'] != null) {
+      closeMinutes = _timeToMinutes(daySchedule['hora_cierre'].toString());
+    }
+
+    int? breakStartMinutes;
+    if (daySchedule != null && daySchedule['hora_descanso'] != null) {
+      breakStartMinutes =
+          _timeToMinutes(daySchedule['hora_descanso'].toString());
+    }
+
+    final now = DateTime.now();
+    final isToday = selectedDate.year == now.year &&
+        selectedDate.month == now.month &&
+        selectedDate.day == now.day;
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    return rawSlots.where((slot) {
+      final startMin = _timeToMinutes(slot);
+      if (startMin == null) return false;
+      final endMin = startMin + totalDuration;
+
+      if (isToday && startMin <= currentMinutes) return false;
+      if (closeMinutes != null && closeMinutes > 0 && endMin > closeMinutes) {
+        return false;
+      }
+      if (breakStartMinutes != null &&
+          breakStartMinutes > 0 &&
+          startMin < (breakStartMinutes + 30) &&
+          endMin > breakStartMinutes) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  void _toggleService(int sId, bool shouldSelect) {
+    if (sId <= 0) return;
+    setState(() {
+      if (shouldSelect) {
+        if (!selectedServiceIds.contains(sId)) {
+          selectedServiceIds.add(sId);
+        }
+      } else {
+        selectedServiceIds.remove(sId);
+      }
+    });
+    _fetchAvailableTimes();
+  }
+
+  String? _extractSlotString(dynamic slot) {
+    if (slot == null) return null;
+    String raw = '';
+    if (slot is Map) {
+      raw = (slot['hora_inicio'] ??
+              slot['hora'] ??
+              slot['inicio'] ??
+              slot['horario'] ??
+              slot['time'] ??
+              '')
+          .toString();
+    } else {
+      raw = slot.toString();
+    }
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.contains('T')) {
+      final timePart = trimmed.split('T').last;
+      return timePart.length >= 5 ? timePart.substring(0, 5) : timePart;
+    }
+    return trimmed.length >= 5 ? trimmed.substring(0, 5) : trimmed;
+  }
+
   Future<void> _fetchAvailableTimes() async {
     if (shop == null || selectedServiceIds.isEmpty) {
-      setState(() => availableTimes = []);
+      setState(() {
+        availableTimes = [];
+        selectedTime = null;
+      });
       return;
     }
 
@@ -81,10 +225,10 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
 
     final dateStr =
         "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
-    final serviciosQuery = selectedServiceIds.join(',');
+    final primaryServiceId = selectedServiceIds.first;
 
     final url =
-        "$baseUrl/client/${shop!.id}/available-times?fecha=$dateStr&servicio_id=$serviciosQuery";
+        "$baseUrl/client/${shop!.id}/available-times?fecha=$dateStr&servicio_id=$primaryServiceId";
 
     try {
       final response = await http.get(
@@ -92,30 +236,45 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
         headers: {"accept": "application/json", "x-api-key": apiKey},
       );
 
+      print("Available times [$url] -> ${response.statusCode}: ${response.body}");
+
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          if (data is Map) {
-            final rawList =
-                data['horarios_disponibles'] ??
-                data['horarios'] ??
-                data['items'] ??
-                [];
+        dynamic rawList = const [];
 
-            availableTimes = rawList.map((slot) {
-              final horaInicio = slot['hora_inicio']?.toString() ?? '';
-              if (horaInicio.length >= 5) {
-                return horaInicio.substring(0, 5);
-              }
-              return horaInicio;
-            }).toList();
-          } else if (data is List) {
-            availableTimes = data;
-          }
+        if (data is Map) {
+          rawList = data['horarios_disponibles'] ??
+              data['horarios'] ??
+              data['slots'] ??
+              data['disponibles'] ??
+              data['items'] ??
+              (data['data'] is Map
+                  ? (data['data']['horarios_disponibles'] ??
+                      data['data']['horarios'] ??
+                      data['data']['slots'] ??
+                      data['data']['items'] ??
+                      [])
+                  : (data['data'] ?? []));
+        } else if (data is List) {
+          rawList = data;
+        }
+
+        final List<String> parsedSlots = (rawList is List ? rawList : const [])
+            .map(_extractSlotString)
+            .whereType<String>()
+            .toSet()
+            .toList();
+
+        final filteredSlots = _filterValidSlotsForSelectedServices(parsedSlots);
+
+        setState(() {
+          availableTimes = filteredSlots;
           isLoadingTimes = false;
         });
       } else {
         setState(() => isLoadingTimes = false);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Error al cargar horarios (${response.statusCode})"),
@@ -123,6 +282,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoadingTimes = false);
       print("Error de conexión al buscar horarios: $e");
     }
@@ -311,19 +471,11 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
                         serviceName: sName,
                       );
                       final sPrice = servicioMap['precio'];
+                      final duracion = servicioMap['duracion_minutos'];
                       final isSelected = selectedServiceIds.contains(sId);
 
                       return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (isSelected) {
-                              selectedServiceIds.remove(sId);
-                            } else {
-                              selectedServiceIds.add(sId);
-                            }
-                            _fetchAvailableTimes();
-                          });
-                        },
+                        onTap: () => _toggleService(sId, !isSelected),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(12),
@@ -343,14 +495,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
                                 value: isSelected,
                                 activeColor: primaryColor,
                                 onChanged: (bool? value) {
-                                  setState(() {
-                                    if (value == true) {
-                                      selectedServiceIds.add(sId);
-                                    } else {
-                                      selectedServiceIds.remove(sId);
-                                    }
-                                    _fetchAvailableTimes();
-                                  });
+                                  _toggleService(sId, value == true);
                                 },
                               ),
                               Expanded(
@@ -376,14 +521,28 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 6),
-                                    if (sPrice != null)
-                                      Text(
-                                        "Precio: \$$sPrice",
-                                        style: TextStyle(
-                                          color: primaryColor,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                                    Row(
+                                      children: [
+                                        if (sPrice != null)
+                                          Text(
+                                            "Precio: \$$sPrice",
+                                            style: TextStyle(
+                                              color: primaryColor,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        if (duracion != null) ...[
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "$duracion min",
+                                            style: TextStyle(
+                                              color: textSecondaryColor,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ],
                                 ),
                               ),
@@ -393,6 +552,17 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
                       );
                     }).toList(),
                   ),
+            if (selectedServiceIds.length > 1) ...[
+              const SizedBox(height: 4),
+              Text(
+                "${selectedServiceIds.length} servicios seleccionados · Duración total: $_totalSelectedDurationMinutes min",
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: secondaryColor,
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Text(
               "2. Selecciona la fecha",
@@ -447,8 +617,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: availableTimes.map((time) {
-                  final timeStr = time.toString();
+                children: availableTimes.map((timeStr) {
                   final isSelectedTime = selectedTime == timeStr;
                   return ChoiceChip(
                     label: Text(timeStr),
@@ -456,6 +625,8 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
                     selectedColor: primaryColor,
                     labelStyle: TextStyle(
                       color: isSelectedTime ? Colors.white : textMainColor,
+                      fontWeight:
+                          isSelectedTime ? FontWeight.bold : FontWeight.normal,
                     ),
                     onSelected: (_) {
                       setState(() => selectedTime = timeStr);

@@ -31,3 +31,12 @@ export interface PasswordResetConfirmPayload{
     nueva_password: string
     confirm_password: string
 }
+
+// HU_05: el id del usuario siempre se toma del token en el backend.
+export interface ProfileUpdatePayload{
+    nombre?: string
+    correo?: string
+    password_actual?: string
+    password_nueva?: string
+    confirm_password?: string
+}

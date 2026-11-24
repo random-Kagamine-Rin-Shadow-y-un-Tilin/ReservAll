@@ -3,6 +3,7 @@ import { jsonRequest } from "../../lib/request";
 import type {
   PasswordResetConfirmPayload,
   PasswordResetRequestOut,
+  ProfileUpdatePayload,
   User,
   RegisterPayload,
   LoginPayLoad,
@@ -73,6 +74,16 @@ export function confirmPasswordReset(
         'POST',
         payload,
         'No pudimos actualizar tu contraseña.',
+    )
+}
+
+// HU_05: edición del perfil propio.
+export function updateProfile(payload: ProfileUpdatePayload): Promise<User> {
+    return jsonRequest(
+        '/profile/me',
+        'PATCH',
+        payload,
+        'No pudimos actualizar tu perfil.',
     )
 }
 

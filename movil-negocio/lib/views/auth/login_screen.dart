@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../config/app_navigator.dart';
 import '../../controllers/auth_controller.dart';
 import '../../utils/validators.dart';
 import '../widgets/custom_button.dart';
@@ -38,9 +39,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text,
     );
 
-    if (success && mounted) {
-      Navigator.pushReplacement(
-        context,
+    if (success) {
+      appNavigatorKey.currentState?.pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     }

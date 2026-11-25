@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
+import '../../config/app_navigator.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/shop_controller.dart';
 import '../auth/edit_profile_screen.dart';
@@ -22,26 +23,17 @@ class NavigationController extends ChangeNotifier {
   }
 }
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  final NavigationController _navController = NavigationController();
-
-  @override
-  void dispose() {
-    _navController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    // El provider es el único dueño del controlador y se encarga de
+    // dispose() al desmontar la ruta. Crearlo en el State y disponerlo
+    // también a mano provocaba "used after being disposed" al cerrar sesión,
+    // cuando el pushReplacement desmonta HomeScreen.
     return ChangeNotifierProvider(
-      create: (context) => _navController,
+      create: (_) => NavigationController(),
       child: const HomeScreenContent(),
     );
   }
@@ -109,12 +101,9 @@ class HomeTab extends StatelessWidget {
             icon: const Icon(Icons.exit_to_app),
             onPressed: () async {
               await authController.logout();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              }
+              appNavigatorKey.currentState?.pushReplacement(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
             },
             tooltip: 'Cerrar sesión',
           ),
@@ -1025,12 +1014,9 @@ class ProfileTab extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () async {
                   await authController.logout();
-                  if (context.mounted) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    );
-                  }
+                  appNavigatorKey.currentState?.pushReplacement(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  );
                 },
                 icon: const Icon(Icons.exit_to_app, color: Colors.red),
                 label: const Text(

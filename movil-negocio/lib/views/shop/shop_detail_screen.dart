@@ -498,12 +498,13 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
           child: ListTile(
             leading: const Icon(Icons.calendar_today, color: AppColors.primary),
             title: Text(
-              s.dia[0].toUpperCase() + s.dia.substring(1),
+              '${s.dia[0].toUpperCase()}${s.dia.substring(1)}'
+              '${s.estadoHorario == false ? ' (inactivo)' : ''}',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             subtitle: Text(
               '${s.horaApertura.substring(0, 5)} - ${s.horaCierre.substring(0, 5)}'
-              '${s.horaDescanso != null ? " (Descanso: ${s.horaDescanso!.substring(0, 5)})" : ""}',
+              '${s.horaDescanso != null ? ' (Descanso: ${s.horaDescanso!.substring(0, 5)} · ${s.descansoDuracionMin} min)' : ''}',
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,

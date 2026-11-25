@@ -353,16 +353,23 @@ class _DiaCard extends StatelessWidget {
                           fontSize: 15,
                         ),
                       ),
-                      if (dia.horario != null)
-                        Text(
-                          '${_hhmm(dia.horario!.horaApertura)} - '
-                          '${_hhmm(dia.horario!.horaCierre)}'
-                          '${dia.horario!.horaDescanso != null ? " · descanso ${_hhmm(dia.horario!.horaDescanso)}" : ""}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
+                      ...() {
+                        final turnos = dia.horarios.isNotEmpty
+                            ? dia.horarios
+                            : [if (dia.horario != null) dia.horario!];
+                        return turnos.map(
+                          (turno) => Text(
+                            '${_hhmm(turno.horaApertura)} - '
+                            '${_hhmm(turno.horaCierre)}'
+                            '${turno.horaDescanso != null ? ' · descanso ${_hhmm(turno.horaDescanso)} (${turno.descansoDuracionMin} min)' : ''}'
+                            '${turno.estadoHorario == false ? ' · inactivo' : ''}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
-                        ),
+                        );
+                      }(),
                     ],
                   ),
                 ),

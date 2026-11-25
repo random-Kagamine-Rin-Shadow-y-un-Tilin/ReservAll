@@ -248,6 +248,7 @@ class ShopController extends ChangeNotifier {
     String? horaApertura,
     String? horaCierre,
     String? horaDescanso,
+    int? descansoDuracionMin,
     bool? estadoHorario,
   }) async {
     _isLoading = true;
@@ -260,6 +261,7 @@ class ShopController extends ChangeNotifier {
         horaApertura: horaApertura,
         horaCierre: horaCierre,
         horaDescanso: horaDescanso,
+        descansoDuracionMin: descansoDuracionMin,
         estadoHorario: estadoHorario,
       );
       _isLoading = false;
@@ -357,6 +359,8 @@ class ShopController extends ChangeNotifier {
     required String horaApertura,
     required String horaCierre,
     String? horaDescanso,
+    int descansoDuracionMin = 60,
+    bool estadoHorario = true,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -368,6 +372,8 @@ class ShopController extends ChangeNotifier {
         horaApertura: horaApertura,
         horaCierre: horaCierre,
         horaDescanso: horaDescanso,
+        descansoDuracionMin: descansoDuracionMin,
+        estadoHorario: estadoHorario,
       );
       if (_currentShop?.id == shopId) {
         await getShopById(shopId);
@@ -424,10 +430,7 @@ class ShopController extends ChangeNotifier {
   }
 
   /// PUT /shop/edit-address/{shopId}
-  Future<bool> editAddress(
-    int shopId,
-    ShopAddressUpdateRequest request,
-  ) async {
+  Future<bool> editAddress(int shopId, ShopAddressUpdateRequest request) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();

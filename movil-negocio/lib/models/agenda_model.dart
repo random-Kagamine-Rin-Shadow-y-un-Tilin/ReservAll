@@ -62,6 +62,8 @@ class AgendaDay {
   final bool abierto;
   final bool bloqueado;
   final ShopSchedule? horario;
+  /// HU_25: el backend expone todos los turnos del día en `horarios`.
+  final List<ShopSchedule> horarios;
   final List<ReservaListItem> reservas;
   final List<AgendaBlock> bloqueos;
   final List<AgendaSlot> disponibilidad;
@@ -72,6 +74,7 @@ class AgendaDay {
     required this.abierto,
     required this.bloqueado,
     this.horario,
+    this.horarios = const [],
     this.reservas = const [],
     this.bloqueos = const [],
     this.disponibilidad = const [],
@@ -85,6 +88,10 @@ class AgendaDay {
         horario: json['horario'] is Map<String, dynamic>
             ? ShopSchedule.fromJson(json['horario'] as Map<String, dynamic>)
             : null,
+        horarios: (json['horarios'] as List? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(ShopSchedule.fromJson)
+            .toList(),
         reservas: (json['reservas'] as List? ?? [])
             .whereType<Map<String, dynamic>>()
             .map(ReservaListItem.fromJson)

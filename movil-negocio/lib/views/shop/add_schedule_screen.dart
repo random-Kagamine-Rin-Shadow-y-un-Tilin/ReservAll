@@ -23,49 +23,25 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
     {'value': 'domingo', 'label': 'Domingo'},
   ];
 
-  String? _dia;
+  String _dia = 'lunes';
   TimeOfDay _apertura = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _cierre = const TimeOfDay(hour: 18, minute: 0);
   TimeOfDay? _descanso;
+  int _descansoDuracionMin = 60;
+  bool _estadoHorario = true;
+  final _duracionController = TextEditingController(text: '60');
 
   @override
-  void initState() {
-    super.initState();
-    final existentes = context.read<ShopController>()
-        .fullProfile
-        ?.schedules
-        .map((s) => s.dia)
-        .toSet() ??
-        <String>{};
-    final disponibles =
-        _dias.where((d) => !existentes.contains(d['value'])).toList();
-    _dia = disponibles.isNotEmpty ? disponibles.first['value'] : null;
+  void dispose() {
+    _duracionController.dispose();
+    super.dispose();
   }
 
   String _format(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:'
       '${t.minute.toString().padLeft(2, '0')}:00';
 
-  List<Map<String, String>> get _disponibles {
-    final existentes = context.watch<ShopController>().fullProfile?.schedules
-            .map((s) => s.dia)
-            .toSet() ??
-        <String>{};
-    return _dias
-        .where((d) => !existentes.contains(d['value']) || d['value'] == _dia)
-        .toList();
-  }
-
   Future<void> _guardar() async {
-    if (_dia == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecciona un día'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
     final apertura = _apertura.hour * 60 + _apertura.minute;
     final cierre = _cierre.hour * 60 + _cierre.minute;
     if (apertura >= cierre) {
@@ -78,13 +54,42 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
       return;
     }
 
+    if (_descansoDuracionMin < 0 || _descansoDuracionMin > 240) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La duración del descanso debe estar entre 0 y 240 minutos',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    if (_descanso != null) {
+      final inicioDescanso = _descanso!.hour * 60 + _descanso!.minute;
+      if (inicioDescanso < apertura ||
+          inicioDescanso + _descansoDuracionMin > cierre) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'El descanso debe estar dentro del horario de atención',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
+
     final controller = context.read<ShopController>();
     final ok = await controller.registerSchedule(
       widget.shopId,
-      dia: _dia!,
+      dia: _dia,
       horaApertura: _format(_apertura),
       horaCierre: _format(_cierre),
       horaDescanso: _descanso != null ? _format(_descanso!) : null,
+      descansoDuracionMin: _descansoDuracionMin,
+      estadoHorario: _estadoHorario,
     );
     if (!mounted) return;
     if (ok) {
@@ -122,26 +127,6 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final disponibles = _disponibles;
-    if (disponibles.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Nuevo horario'),
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.surface,
-        ),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'Ya tienes horarios registrados para todos los días.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-        ),
-      );
-    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nuevo horario'),
@@ -157,7 +142,7 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
               labelText: 'Día',
               border: OutlineInputBorder(),
             ),
-            items: disponibles
+            items: _dias
                 .map(
                   (d) => DropdownMenuItem(
                     value: d['value'],
@@ -165,7 +150,9 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
                   ),
                 )
                 .toList(),
-            onChanged: (v) => setState(() => _dia = v),
+            onChanged: (v) {
+              if (v != null) setState(() => _dia = v);
+            },
           ),
           const SizedBox(height: 16),
           Card(
@@ -188,12 +175,13 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
           ),
           Card(
             child: ListTile(
-              leading: const Icon(Icons.free_breakfast, color: AppColors.primary),
+              leading: const Icon(
+                Icons.free_breakfast,
+                color: AppColors.primary,
+              ),
               title: const Text('Descanso (opcional)'),
               subtitle: Text(
-                _descanso == null
-                    ? 'Sin descanso'
-                    : _descanso!.format(context),
+                _descanso == null ? 'Sin descanso' : _descanso!.format(context),
               ),
               trailing: _descanso == null
                   ? const Icon(Icons.add)
@@ -203,6 +191,30 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
                     ),
               onTap: _elegirDescanso,
             ),
+          ),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextFormField(
+                controller: _duracionController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Duración del descanso (minutos)',
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  _descansoDuracionMin = int.tryParse(value) ?? -1;
+                },
+              ),
+            ),
+          ),
+          SwitchListTile(
+            title: const Text('Turno activo'),
+            subtitle: const Text(
+              'Los turnos inactivos no se consideran para reservas',
+            ),
+            value: _estadoHorario,
+            onChanged: (value) => setState(() => _estadoHorario = value),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(

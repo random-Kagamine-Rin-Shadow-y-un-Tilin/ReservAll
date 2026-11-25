@@ -176,7 +176,9 @@ class ShopService {
         if (response.data is! Map<String, dynamic>) {
           throw Exception('Formato de respuesta inválido');
         }
-        final profile = ShopFullProfile.fromJson(response.data as Map<String, dynamic>);
+        final profile = ShopFullProfile.fromJson(
+          response.data as Map<String, dynamic>,
+        );
 
         // El perfil completo del backend no incluye id_social. Se obtienen los
         // contactos desde el endpoint dedicado para poder editarlos/borrarlos.
@@ -321,12 +323,16 @@ class ShopService {
     String? horaApertura,
     String? horaCierre,
     String? horaDescanso,
+    int? descansoDuracionMin,
     bool? estadoHorario,
   }) async {
     final body = <String, dynamic>{};
     if (horaApertura != null) body['hora_apertura'] = horaApertura;
     if (horaCierre != null) body['hora_cierre'] = horaCierre;
     if (horaDescanso != null) body['hora_descanso'] = horaDescanso;
+    if (descansoDuracionMin != null) {
+      body['descanso_duracion_min'] = descansoDuracionMin;
+    }
     if (estadoHorario != null) body['estado_horario'] = estadoHorario;
 
     final response = await _apiService.put(
@@ -460,6 +466,8 @@ class ShopService {
     required String horaApertura,
     required String horaCierre,
     String? horaDescanso,
+    int descansoDuracionMin = 60,
+    bool estadoHorario = true,
   }) async {
     final response = await _apiService.post(
       '/shop/register-schedule/$shopId',
@@ -468,6 +476,8 @@ class ShopService {
         'hora_apertura': horaApertura,
         'hora_cierre': horaCierre,
         'hora_descanso': horaDescanso,
+        'descanso_duracion_min': descansoDuracionMin,
+        'estado_horario': estadoHorario,
       },
       requiresAuth: true,
     );

@@ -160,6 +160,7 @@ class ShopSchedule {
   final String horaApertura;
   final String horaCierre;
   final String? horaDescanso;
+  final int descansoDuracionMin;
   final bool? estadoHorario;
 
   ShopSchedule({
@@ -168,6 +169,7 @@ class ShopSchedule {
     required this.horaApertura,
     required this.horaCierre,
     this.horaDescanso,
+    this.descansoDuracionMin = 60,
     this.estadoHorario,
   });
 
@@ -180,6 +182,9 @@ class ShopSchedule {
       horaApertura: json['hora_apertura'] ?? '',
       horaCierre: json['hora_cierre'] ?? '',
       horaDescanso: json['hora_descanso'],
+      descansoDuracionMin: json['descanso_duracion_min'] is int
+          ? json['descanso_duracion_min'] as int
+          : int.tryParse(json['descanso_duracion_min']?.toString() ?? '') ?? 60,
       estadoHorario: json['estado_horario'] ?? true,
     );
   }
@@ -190,6 +195,7 @@ class ShopSchedule {
     'hora_apertura': horaApertura,
     'hora_cierre': horaCierre,
     'hora_descanso': horaDescanso,
+    'descanso_duracion_min': descansoDuracionMin,
     'estado_horario': estadoHorario,
   };
 }

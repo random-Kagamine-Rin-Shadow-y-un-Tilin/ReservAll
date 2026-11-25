@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'config/app_colors.dart';
 import 'controllers/auth_controller.dart';
+import 'controllers/category_controller.dart';
 import 'controllers/shop_controller.dart';
 import 'controllers/user_controller.dart';
 import 'services/api_service.dart';
@@ -35,6 +36,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => AuthController()),
         ChangeNotifierProvider(create: (context) => ShopController()),
         ChangeNotifierProvider(create: (context) => UserController()),
+        ChangeNotifierProvider(create: (_) => CategoryController()),
         ChangeNotifierProvider(create: (_) => ProfesionalController()),
         ChangeNotifierProvider(create: (_) => ServiceController()),
         ChangeNotifierProvider(

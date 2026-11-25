@@ -5,6 +5,7 @@ import '../../controllers/auth_controller.dart';
 import '../../controllers/shop_controller.dart';
 import '../auth/edit_profile_screen.dart';
 import '../auth/login_screen.dart';
+import '../categorias/categories_screen.dart';
 import '../reservas/reservas_list_screen.dart';
 import '../shop/register_shop_screen.dart';
 import '../shop/shop_detail_screen.dart';
@@ -974,6 +975,24 @@ class ProfileTab extends StatelessWidget {
                 ),
               ),
             ),
+
+            // HU_14: la administración de categorías solo existe para admin.
+            if (user?.rol == 'admin') ...[
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CategoriesScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.category),
+                  label: const Text('Administrar categorías'),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 24),
 

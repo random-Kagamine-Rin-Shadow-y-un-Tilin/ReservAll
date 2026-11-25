@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../config/app_colors.dart';
+import '../../controllers/category_controller.dart';
 import '../../controllers/shop_controller.dart';
 import '../../models/shop_model.dart';
 import '../widgets/custom_button.dart';
@@ -26,33 +27,30 @@ class _EditShopScreenState extends State<EditShopScreen> {
   File? _newImageFile;
   final ImagePicker _picker = ImagePicker();
 
-  final List<Map<String, dynamic>> _categories = [
-    {'id': 1, 'nombre': 'Barbería'},
-    {'id': 2, 'nombre': 'Spa'},
-    {'id': 3, 'nombre': 'Restaurante'},
-    {'id': 4, 'nombre': 'Belleza'},
-    {'id': 5, 'nombre': 'Otros'},
-    {'id': 6, 'nombre': 'Gastronomía'},
-    {'id': 7, 'nombre': 'Tecnología'},
-    {'id': 8, 'nombre': 'Moda'},
-    {'id': 9, 'nombre': 'Salud y Bienestar'},
-    {'id': 10, 'nombre': 'Educación'},
-    {'id': 11, 'nombre': 'Jardinería'},
-    {'id': 12, 'nombre': 'Arte y Diseño'},
-    {'id': 13, 'nombre': 'Automotriz'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _nombreController = TextEditingController(text: widget.shop.nombre);
+    _descripcionController = TextEditingController(
+      text: widget.shop.descripcion,
+    );
 
- @override
-void initState() {
-  super.initState();
-  _nombreController = TextEditingController(text: widget.shop.nombre);
-  _descripcionController = TextEditingController(text: widget.shop.descripcion);
+    final catId = widget.shop.idCategoria;
 
-  final catId = widget.shop.idCategoria;
-  final exists = catId != null && _categories.any((c) => c['id'] == catId);
-  
-  _selectedCategory = exists ? catId : 5;
-}
+    _selectedCategory = catId ?? 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCategories());
+  }
+
+  Future<void> _loadCategories() async {
+    final controller = context.read<CategoryController>();
+    final ok = await controller.loadPublicCategories();
+    if (!mounted || !ok) return;
+    final categories = controller.publicCategories;
+    if (categories.isEmpty) return;
+    if (!categories.any((c) => c.idCategoria == _selectedCategory)) {
+      setState(() => _selectedCategory = categories.first.idCategoria);
+    }
+  }
 
   @override
   void dispose() {
@@ -243,18 +241,37 @@ void initState() {
                       filled: true,
                       fillColor: AppColors.surfaceLight,
                     ),
-                    items: _categories.map((c) {
-                      return DropdownMenuItem<int>(
-                        value: c['id'] as int,
-                        child: Text(c['nombre'] as String),
-                      );
-                    }).toList(),
+                    items: context
+                        .watch<CategoryController>()
+                        .publicCategories
+                        .map((c) {
+                          return DropdownMenuItem<int>(
+                            value: c.idCategoria,
+                            child: Text(c.nombreCategoria),
+                          );
+                        })
+                        .toList(),
                     onChanged: (v) {
                       if (v != null) setState(() => _selectedCategory = v);
                     },
                     validator: (v) =>
                         v == null ? 'Selecciona una categoría' : null,
                   ),
+                  if (context
+                      .watch<CategoryController>()
+                      .publicCategories
+                      .isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        context.read<CategoryController>().errorMessage ??
+                            'Cargando categorías…',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 24),
 
                   CustomButton(

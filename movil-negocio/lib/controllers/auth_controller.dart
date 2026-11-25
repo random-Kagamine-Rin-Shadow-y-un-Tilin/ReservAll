@@ -7,7 +7,7 @@ import '../services/storage_service.dart';
 class AuthController extends ChangeNotifier {
   final AuthService _authService = AuthService();
   final StorageService _storageService = StorageService();
-  
+
   User? _user;
   bool _isLoading = false;
   String? _errorMessage;
@@ -24,7 +24,7 @@ class AuthController extends ChangeNotifier {
   Future<void> _loadUserFromStorage() async {
     _isLoading = true;
     notifyListeners();
-    
+
     try {
       _user = await _storageService.getUser();
       if (_user != null) {
@@ -66,7 +66,7 @@ class AuthController extends ChangeNotifier {
       final user = await _authService.register(registerRequest);
       _user = user;
       await _storageService.saveUser(user);
-      
+
       _isLoading = false;
       notifyListeners();
       return true;
@@ -93,7 +93,57 @@ class AuthController extends ChangeNotifier {
       final user = await _authService.login(loginRequest);
       _user = user;
       await _storageService.saveUser(user);
-      
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // HU_03: solicitar código de recuperación
+  Future<PasswordResetRequestOut?> requestPasswordReset(String correo) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _authService.requestPasswordReset(correo);
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  // HU_03: restablecer contraseña con el código recibido
+  Future<bool> resetPassword({
+    required String correo,
+    required String codigo,
+    required String nuevaPassword,
+    required String confirmPassword,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _authService.resetPassword(
+        PasswordResetConfirmRequest(
+          correo: correo,
+          codigo: codigo,
+          nuevaPassword: nuevaPassword,
+          confirmPassword: confirmPassword,
+        ),
+      );
       _isLoading = false;
       notifyListeners();
       return true;

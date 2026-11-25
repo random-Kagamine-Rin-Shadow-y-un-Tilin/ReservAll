@@ -83,6 +83,36 @@ class AuthService {
     }
   }
 
+  // HU_03: solicitar código de recuperación
+  Future<PasswordResetRequestOut> requestPasswordReset(String correo) async {
+    final response = await _apiService.post(
+      '/auth/forgot-password',
+      body: {'correo': correo.trim()},
+      requiresAuth: false,
+    );
+
+    final data = response.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Respuesta inválida del servidor');
+    }
+    return PasswordResetRequestOut.fromJson(data);
+  }
+
+  // HU_03: confirmar código y nueva contraseña
+  Future<User> resetPassword(PasswordResetConfirmRequest request) async {
+    final response = await _apiService.post(
+      '/auth/reset-password',
+      body: request.toJson(),
+      requiresAuth: false,
+    );
+
+    final data = response.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Respuesta inválida del servidor');
+    }
+    return User.fromJson(data);
+  }
+
   // Refrescar token
   Future<bool> refreshToken() async {
     try {

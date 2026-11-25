@@ -5,6 +5,7 @@ import '../../utils/validators.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/loading_widget.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 import '../home/home_screen.dart';
 
@@ -152,7 +153,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () {
-                          // TODO: Implementar recuperación de contraseña
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ForgotPasswordScreen(),
+                            ),
+                          );
                         },
                         child: const Text('¿Olvidaste tu contraseña?'),
                       ),

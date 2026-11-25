@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/app_colors.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/shop_controller.dart';
+import '../auth/edit_profile_screen.dart';
 import '../auth/login_screen.dart';
 import '../reservas/reservas_list_screen.dart';
 import '../shop/register_shop_screen.dart';
@@ -975,6 +976,29 @@ class ProfileTab extends StatelessWidget {
             ),
 
             const SizedBox(height: 24),
+
+            // HU_05: acceso a la edición del perfil
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const EditProfileScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.edit),
+                label: const Text('Editar perfil'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             // Botón cerrar sesión
             SizedBox(

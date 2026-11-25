@@ -105,45 +105,16 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  // HU_03: solicitar código de recuperación
-  Future<PasswordResetRequestOut?> requestPasswordReset(String correo) async {
+  // HU_05: actualizar perfil propio y persistir el resultado
+  Future<bool> updateProfile(ProfileUpdateRequest request) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final result = await _authService.requestPasswordReset(correo);
-      _isLoading = false;
-      notifyListeners();
-      return result;
-    } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      _isLoading = false;
-      notifyListeners();
-      return null;
-    }
-  }
-
-  // HU_03: restablecer contraseña con el código recibido
-  Future<bool> resetPassword({
-    required String correo,
-    required String codigo,
-    required String nuevaPassword,
-    required String confirmPassword,
-  }) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    try {
-      await _authService.resetPassword(
-        PasswordResetConfirmRequest(
-          correo: correo,
-          codigo: codigo,
-          nuevaPassword: nuevaPassword,
-          confirmPassword: confirmPassword,
-        ),
-      );
+      final user = await _authService.updateProfile(request);
+      _user = user;
+      await _storageService.saveUser(user);
       _isLoading = false;
       notifyListeners();
       return true;

@@ -140,6 +140,21 @@ class AuthService {
     }
   }
 
+  // HU_05: editar el propio perfil
+  Future<User> updateProfile(ProfileUpdateRequest request) async {
+    final response = await _apiService.patch(
+      '/profile/me',
+      body: request.toJson(),
+      requiresAuth: true,
+    );
+
+    final data = response.data;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Respuesta inválida del servidor');
+    }
+    return User.fromJson(data);
+  }
+
   // Obtener perfil del usuario actual
   Future<User?> getCurrentUser() async {
     try {

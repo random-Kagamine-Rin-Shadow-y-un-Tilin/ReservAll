@@ -32,31 +32,51 @@ class LoginRequest {
   final String correo;
   final String password;
 
-  LoginRequest({
-    required this.correo,
-    required this.password,
-  });
+  LoginRequest({required this.correo, required this.password});
 
   Map<String, dynamic> toJson() {
-    return {
-      'correo': correo,
-      'password': password,
-    };
+    return {'correo': correo, 'password': password};
   }
+}
+
+// HU_05: request de PATCH /profile/me.
+// Solo se envían los campos que el usuario cambió; el id se toma del token
+// en el backend, nunca del cliente.
+class ProfileUpdateRequest {
+  final String? nombre;
+  final String? correo;
+  final String? passwordActual;
+  final String? passwordNueva;
+  final String? confirmPassword;
+
+  ProfileUpdateRequest({
+    this.nombre,
+    this.correo,
+    this.passwordActual,
+    this.passwordNueva,
+    this.confirmPassword,
+  });
+
+  Map<String, dynamic> toJson() => {
+    if (nombre != null) 'nombre': nombre!.trim(),
+    if (correo != null) 'correo': correo!.trim(),
+    if (passwordActual != null && passwordActual!.isNotEmpty)
+      'password_actual': passwordActual,
+    if (passwordNueva != null && passwordNueva!.isNotEmpty)
+      'password_nueva': passwordNueva,
+    if (confirmPassword != null && confirmPassword!.isNotEmpty)
+      'confirm_password': confirmPassword,
+  };
 }
 
 // Request para refresh token
 class RefreshTokenRequest {
   final String refreshToken;
 
-  RefreshTokenRequest({
-    required this.refreshToken,
-  });
+  RefreshTokenRequest({required this.refreshToken});
 
   Map<String, dynamic> toJson() {
-    return {
-      'refresh_token': refreshToken,
-    };
+    return {'refresh_token': refreshToken};
   }
 }
 
@@ -74,7 +94,7 @@ class AuthResponse {
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
     final data = json['data'] ?? json;
-    
+
     return AuthResponse(
       user: User.fromJson(data),
       token: data['token'] ?? '',

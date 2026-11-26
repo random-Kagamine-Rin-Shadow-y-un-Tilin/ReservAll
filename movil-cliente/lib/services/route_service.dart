@@ -34,7 +34,7 @@ class RouteInfo {
     }
     final hours = totalMinutes ~/ 60;
     final mins = totalMinutes % 60;
-    return mins == 0 ? '${hours} h' : '${hours} h ${mins} min';
+    return mins == 0 ? '$hours h' : '$hours h $mins min';
   }
 }
 

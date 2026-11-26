@@ -63,7 +63,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
         detail = result;
       });
     } catch (e) {
-      print("Error al cargar servicios del negocio: $e");
+      debugPrint("Error al cargar servicios del negocio: $e");
     }
   }
 
@@ -71,7 +71,6 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
     final servicios = detail?.servicios ?? [];
     int total = 0;
     for (final raw in servicios) {
-      if (raw is! Map) continue;
       final sId =
           int.tryParse((raw['id_servicio'] ?? raw['id'] ?? '0').toString()) ??
           0;
@@ -129,7 +128,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
 
     Map<String, dynamic>? daySchedule;
     for (final h in horarios) {
-      if (h is Map && _normalizeDay(h['dia']?.toString() ?? '') == targetDay) {
+      if (_normalizeDay(h['dia']?.toString() ?? '') == targetDay) {
         daySchedule = Map<String, dynamic>.from(h);
         break;
       }
@@ -236,7 +235,9 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
         headers: {"accept": "application/json", "x-api-key": apiKey},
       );
 
-      print("Available times [$url] -> ${response.statusCode}: ${response.body}");
+      debugPrint(
+        "Available times [$url] -> ${response.statusCode}: ${response.body}",
+      );
 
       if (!mounted) return;
       if (response.statusCode == 200) {
@@ -273,8 +274,8 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
           isLoadingTimes = false;
         });
       } else {
-        setState(() => isLoadingTimes = false);
         if (!mounted) return;
+        setState(() => isLoadingTimes = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Error al cargar horarios (${response.statusCode})"),
@@ -284,7 +285,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => isLoadingTimes = false);
-      print("Error de conexión al buscar horarios: $e");
+      debugPrint("Error de conexión al buscar horarios: $e");
     }
   }
 
@@ -296,6 +297,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
       lastDate: DateTime.now().add(const Duration(days: 90)),
     );
     if (picked != null && picked != selectedDate) {
+      if (!mounted) return;
       setState(() {
         selectedDate = picked;
       });
@@ -318,13 +320,20 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
     setState(() => isLoading = true);
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     String? sessionCookie = prefs.getString('session_cookie');
+
+    final currentShop = shop;
+    if (currentShop == null) {
+      setState(() => isLoading = false);
+      return;
+    }
 
     final dateStr =
         "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
 
     final Map<String, dynamic> bodyData = {
-      "negocio_id": int.tryParse(shop!.id.toString()) ?? 0,
+      "negocio_id": currentShop.id,
       "servicios_ids": selectedServiceIds,
       "servicio_id": selectedServiceIds.first,
       "fecha": dateStr,
@@ -351,6 +360,7 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
         body: jsonEncode(bodyData),
       );
 
+      if (!mounted) return;
       setState(() => isLoading = false);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -376,9 +386,20 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
           ),
         );
       } else {
-        final errorBody = jsonDecode(response.body);
-        final errorMsg =
-            errorBody['detail'] ?? "No se pudo procesar la reserva.";
+        String errorMsg = "No se pudo procesar la reserva.";
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) {
+            final detail = decoded['detail'] ?? decoded['message'];
+            if (detail is List) {
+              errorMsg = detail
+                  .map((item) => item is Map ? item['msg'] ?? item : item)
+                  .join('\n');
+            } else if (detail != null) {
+              errorMsg = detail.toString();
+            }
+          }
+        } catch (_) {}
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -389,9 +410,9 @@ class _BookingCreateScreenState extends State<BookingCreateScreen> {
         );
       }
     } catch (e) {
-      setState(() => isLoading = false);
-      print("Error al enviar la reserva: $e");
       if (!mounted) return;
+      setState(() => isLoading = false);
+      debugPrint("Error al enviar la reserva: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Error de conexión al enviar la reserva."),

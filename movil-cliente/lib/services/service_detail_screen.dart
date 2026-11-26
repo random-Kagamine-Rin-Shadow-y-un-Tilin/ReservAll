@@ -78,29 +78,39 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
 
     try {
       final headers = await _getHeaders();
-
-      final candidateUrls = [
-        "$baseUrl/services/${widget.serviceId}",
-        "$baseUrl/servicios/${widget.serviceId}",
-      ];
+      final negocioId =
+          service?.negocioId ?? widget.initialService?.negocioId ?? 0;
 
       ServiceModel? fetchedService;
 
-      for (final url in candidateUrls) {
-        final response = await http.get(Uri.parse(url), headers: headers);
+      if (negocioId > 0) {
+        final response = await http.get(
+          Uri.parse("$baseUrl/client/$negocioId/servicios"),
+          headers: headers,
+        );
+
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
-          final Map<String, dynamic>? rawMap =
-              (decoded is Map<String, dynamic> &&
-                  decoded['data'] is Map<String, dynamic>)
-              ? decoded['data'] as Map<String, dynamic>
-              : (decoded is Map<String, dynamic> ? decoded : null);
+          final List<dynamic> rawList = decoded is List
+              ? decoded
+              : (decoded is Map && decoded['data'] is List)
+              ? decoded['data'] as List
+              : const [];
 
-          if (rawMap != null) {
+          for (final raw in rawList) {
+            if (raw is! Map) continue;
+            final rawMap = Map<String, dynamic>.from(raw);
+            final id = int.tryParse(
+              (rawMap['id_servicio'] ?? rawMap['id'] ?? 0).toString(),
+            );
+            if (id != widget.serviceId) continue;
+
             final parsed = ServiceModel.fromJson(rawMap);
             final resolvedDesc = ServiceDescriptionHelper.resolve(
               raw: rawMap,
-              serviceId: parsed.idServicio > 0 ? parsed.idServicio : widget.serviceId,
+              serviceId: parsed.idServicio > 0
+                  ? parsed.idServicio
+                  : widget.serviceId,
               serviceName: parsed.nombre,
               currentDescription: service?.descripcion,
             );
@@ -156,32 +166,27 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
     int negocioId,
     Map<String, String> headers,
   ) async {
-    final businessUrls = [
-      "$baseUrl/businesses/$negocioId",
-      "$baseUrl/negocios/$negocioId",
-    ];
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/client/shops/$negocioId"),
+        headers: headers,
+      );
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        final Map<String, dynamic>? data = decoded is Map
+            ? (decoded['general'] is Map
+                  ? Map<String, dynamic>.from(decoded['general'] as Map)
+                  : Map<String, dynamic>.from(decoded))
+            : null;
 
-    for (final url in businessUrls) {
-      try {
-        final res = await http.get(Uri.parse(url), headers: headers);
-        if (res.statusCode == 200) {
-          final decoded = jsonDecode(res.body);
-          final data =
-              (decoded is Map<String, dynamic> &&
-                  decoded['data'] is Map<String, dynamic>)
-              ? decoded['data'] as Map<String, dynamic>
-              : (decoded is Map<String, dynamic> ? decoded : null);
-
-          final name = (data?['nombre'] ?? data?['nombre_negocio'])
-              ?.toString()
-              .trim();
-          if (name != null && name.isNotEmpty) {
-            resolvedBusinessName = name;
-            break;
-          }
+        final name = (data?['nombre'] ?? data?['nombre_negocio'])
+            ?.toString()
+            .trim();
+        if (name != null && name.isNotEmpty) {
+          resolvedBusinessName = name;
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
   }
 
   void _handleReserve() {
@@ -282,7 +287,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -300,7 +305,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: primaryColor.withOpacity(0.12),
+                        color: primaryColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -319,8 +324,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: item.estaDisponible
-                            ? secondaryColor.withOpacity(0.15)
-                            : Colors.red.withOpacity(0.12),
+                            ? secondaryColor.withValues(alpha: 0.15)
+                            : Colors.red.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -413,7 +418,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),
@@ -451,7 +456,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),
@@ -569,7 +574,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
         color: surfaceColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, -3),
           ),

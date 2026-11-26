@@ -193,16 +193,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   String? _resolveImageUrl(dynamic rawImage) {
-    if (rawImage == null) return null;
-    final img = rawImage.toString().trim();
-    if (img.isEmpty || img.toLowerCase() == 'null') return null;
-    if (img.startsWith('http://') || img.startsWith('https://')) {
-      return img;
-    }
-    if (img.startsWith('/')) {
-      return '$baseUrl$img';
-    }
-    return '$baseUrl/static/$img';
+    final url = resolveImageUrl(rawImage);
+    return url.isEmpty ? null : url;
   }
 
   String? _formatAddress(dynamic rawAddress) {
@@ -291,7 +283,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       if (negocioId != null) 'id': negocioObj['id'] ?? negocioId,
       if (negocioId != null) 'id_negocio': negocioObj['id_negocio'] ?? negocioId,
       if (nombre.isNotEmpty) 'nombre': nombre,
-      if (direccion != null) 'direccion': direccion,
+      'direccion': ?direccion,
       if (rawImg != null) 'imagenNegocio': _resolveImageUrl(rawImg) ?? rawImg,
     };
 

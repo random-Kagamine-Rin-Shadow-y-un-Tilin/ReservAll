@@ -174,9 +174,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
           final formattedAddress =
               _buildAddressFromDetail(shopDetail, resolvedShop);
 
-          for (final rawSvc in shopDetail.servicios) {
-            if (rawSvc is! Map) continue;
-            final svcMap = Map<String, dynamic>.from(rawSvc);
+          for (final svcMap in shopDetail.servicios) {
             if (!_isServiceActive(svcMap)) continue;
 
             final int sId = int.tryParse(
@@ -201,7 +199,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
                 'serviceDescription': sDesc,
                 'duration': svcMap['duracion_minutos'],
                 'price': svcMap['precio'],
-                'image': _getImageUrl(
+                'image': resolveImageUrl(
                   svcMap['imagen'] ??
                       svcMap['imagen_url'] ??
                       svcMap['imagenServicio'] ??
@@ -475,19 +473,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
       disponibleFecha != null ||
       latitud != null ||
       orden != "relevancia";
-
-  String _getImageUrl(dynamic rawImage) {
-    if (rawImage == null) return '';
-    String img = rawImage.toString().trim();
-    if (img.isEmpty || img == 'null') return '';
-    if (img.startsWith("http://") || img.startsWith("https://")) {
-      return img;
-    }
-    if (img.startsWith("/")) {
-      return "http://10.0.0.6:8000$img";
-    }
-    return "http://10.0.0.6:8000/static/$img";
-  }
 
   String _priceLabel(Shop shop) {
     if (shop.precioMinimo == null && shop.precioMaximo == null) {
@@ -924,8 +909,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   bool get _hasLocation => latitud != null && longitud != null;
 
   Widget _buildFilterBar() {
-    final hasPriceFilter = minPrecio != null || maxPrecio != null;
-
     return SizedBox(
       height: 44,
       child: ListView(
@@ -1011,33 +994,6 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
               ),
             )
           : Icon(icon),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: textMainColor,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            "($count)",
-            style: TextStyle(
-              color: textSecondaryColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1225,7 +1181,7 @@ class _BusinessListScreenState extends State<BusinessListScreen> {
   }
 
   Widget _buildShopCard(Shop shop) {
-    final imageUrl = _getImageUrl(shop.imagenNegocio);
+    final imageUrl = resolveImageUrl(shop.imagenNegocio);
     final address = shop.direccion ?? shop.ciudad ?? "Ubicación no registrada";
     final distanceText = _distanceLabel(shop);
 

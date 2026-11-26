@@ -178,13 +178,12 @@ class AuthController extends ChangeNotifier {
 
   // Logout
   Future<void> logout() async {
-    _isLoading = true;
-    notifyListeners();
-
+    // No se activa _isLoading para evitar un rebuild intermedio mientras se
+    // espera la respuesta del servidor. Solo se notifica el estado final.
     try {
       await _authService.logout();
     } catch (e) {
-      // Ignorar errores
+      // Ignorar errores de red: la sesión local se cierra de todas formas.
     } finally {
       _user = null;
       await _storageService.clearUser();

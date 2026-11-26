@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'config/app_colors.dart';
+import 'config/app_navigator.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/category_controller.dart';
 import 'controllers/shop_controller.dart';
@@ -56,6 +57,7 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
+        navigatorKey: appNavigatorKey,
         title: 'SRNL Back',
         theme: AppTheme.lightTheme,
         home: Consumer<AuthController>(

@@ -7,7 +7,6 @@ import '/services/service_description_helper.dart';
 import '/models/service_model.dart';
 import '/services/service_detail_screen.dart';
 import '/screens/business/business_map_screen.dart';
-import '/screens/business/business_route_map_screen.dart';
 
 class BusinessDetailScreen extends StatefulWidget {
   const BusinessDetailScreen({super.key});
@@ -102,6 +101,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         }
 
         final exists = favs.any((item) {
+          if (item is! Map) return false;
           final id = item['id'] ?? item['id_negocio'] ?? item['business_id'];
           return id.toString() == shopId.toString();
         });
@@ -132,20 +132,19 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        if (!mounted) return;
         setState(() {
           isFavorite = !isFavorite;
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isFavorite ? "Añadido a favoritos" : "Eliminado de favoritos",
-              ),
-              backgroundColor: primaryColor,
-              duration: const Duration(seconds: 1),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isFavorite ? "Añadido a favoritos" : "Eliminado de favoritos",
             ),
-          );
-        }
+            backgroundColor: primaryColor,
+            duration: const Duration(seconds: 1),
+          ),
+        );
       } else {
         debugPrint(
           "Error del servidor al modificar favorito: ${response.statusCode} - ${response.body}",
@@ -169,18 +168,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
     );
   }
 
-  String _getImageUrl(dynamic rawImage) {
-    if (rawImage == null) return '';
-    String img = rawImage.toString().trim();
-    if (img.isEmpty || img == 'null') return '';
-    if (img.startsWith("http://") || img.startsWith("https://")) {
-      return img;
-    }
-    if (img.startsWith("/")) {
-      return "$baseUrl$img";
-    }
-    return "$baseUrl/static/$img";
-  }
+  String _getImageUrl(dynamic rawImage) => resolveImageUrl(rawImage);
 
   String _dayLabel(String? value) {
     if (value == null || value.trim().isEmpty) return '';

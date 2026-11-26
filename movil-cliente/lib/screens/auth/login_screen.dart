@@ -5,6 +5,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '/services/api_service.dart';
 import 'register_screen.dart';
 
+/// Extrae las cookies de sesión del encabezado `set-cookie` para enviarlas
+/// como `Cookie` en las siguientes peticiones (sin atributos como Path/HttpOnly).
+String _cookieHeaderFromSetCookie(String? rawSetCookie) {
+  if (rawSetCookie == null || rawSetCookie.trim().isEmpty) return '';
+
+  final values = <String>[];
+  for (final name in const ['SNRL_access_token', 'SNRL_refresh_token']) {
+    final match = RegExp('$name=([^;,\\s]+)').firstMatch(rawSetCookie);
+    if (match != null) {
+      values.add('$name=${match.group(1)}');
+    }
+  }
+
+  if (values.isEmpty) {
+    final firstPair = rawSetCookie.split(',').first.split(';').first.trim();
+    if (firstPair.contains('=')) {
+      values.add(firstPair);
+    }
+  }
+
+  return values.join('; ');
+}
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -56,6 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: jsonEncode(bodyData),
       );
 
+      if (!mounted) return;
       setState(() => isLoading = false);
 
       if (response.statusCode == 200) {
@@ -63,9 +87,11 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('user_email', cleanEmail);
         await prefs.setString('correo', cleanEmail);
 
-        String? rawCookie = response.headers['set-cookie'];
-        if (rawCookie != null) {
-          await prefs.setString('session_cookie', rawCookie);
+        final cookieHeader = _cookieHeaderFromSetCookie(
+          response.headers['set-cookie'],
+        );
+        if (cookieHeader.isNotEmpty) {
+          await prefs.setString('session_cookie', cookieHeader);
         }
 
         try {
@@ -129,9 +155,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       debugPrint("Error de conexión en login: $e");
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Error de conexión con el servidor."),

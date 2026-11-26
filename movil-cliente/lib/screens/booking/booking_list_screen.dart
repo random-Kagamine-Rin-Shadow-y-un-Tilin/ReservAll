@@ -260,18 +260,7 @@ class _BookingListScreenState extends State<BookingListScreen> {
     }
   }
 
-  String _getImageUrl(dynamic rawImage) {
-    if (rawImage == null) return '';
-    final img = rawImage.toString().trim();
-    if (img.isEmpty || img == 'null') return '';
-    if (img.startsWith("http://") || img.startsWith("https://")) {
-      return img;
-    }
-    if (img.startsWith("/")) {
-      return "$baseUrl$img";
-    }
-    return "$baseUrl/static/$img";
-  }
+  String _getImageUrl(dynamic rawImage) => resolveImageUrl(rawImage);
 
   String? _buildAddressFromShopDetail(ShopDetail? shopDetail, Shop? resolvedShop) {
     final address = shopDetail?.direccion;
@@ -409,7 +398,7 @@ class _BookingListScreenState extends State<BookingListScreen> {
 
                 final mergedRes = <String, dynamic>{
                   ...detailData,
-                  if (freshRes != null) ...freshRes,
+                  ...?freshRes,
                 };
 
                 final bizId = _extractBusinessId(mergedRes);
@@ -820,9 +809,9 @@ class _BookingListScreenState extends State<BookingListScreen> {
   }
 
   List<dynamic> get _filteredReservations {
-    if (selectedFilter == 'Todas') return reservations;
-    return reservations.where((r) {
-      if (r is! Map) return false;
+    final onlyMaps = reservations.whereType<Map>().toList();
+    if (selectedFilter == 'Todas') return onlyMaps;
+    return onlyMaps.where((r) {
       final estado = (r['estado'] ?? '').toString().toLowerCase();
       if (selectedFilter == 'Próximas') {
         return estado == 'pendiente' || estado == 'confirmada';

@@ -66,6 +66,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         body: jsonEncode(bodyData),
       );
 
+      if (!mounted) return;
       setState(() => isLoading = false);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -104,9 +105,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => isLoading = false);
       debugPrint("Error de conexión en registro: $e");
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Error de conexión con el servidor."),
@@ -217,7 +218,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "* Debe tener al menos 6 caracteres y una letra mayúscula. Si no la incluyes, no podrás registrarte.",
+                  "* Debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.",
                   style: TextStyle(
                     fontSize: 11,
                     color: primaryColor,
@@ -252,11 +253,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Por favor ingresa una contraseña';
                     }
-                    if (value.length < 6) {
-                      return 'Debe tener al menos 6 caracteres';
+                    if (value.length < 8) {
+                      return 'Debe tener al menos 8 caracteres';
                     }
                     if (!value.contains(RegExp(r'[A-Z]'))) {
                       return 'Debe incluir al menos una letra mayúscula';
+                    }
+                    if (!value.contains(RegExp(r'[a-z]'))) {
+                      return 'Debe incluir al menos una letra minúscula';
+                    }
+                    if (!value.contains(RegExp(r'[0-9]'))) {
+                      return 'Debe incluir al menos un número';
                     }
                     return null;
                   },

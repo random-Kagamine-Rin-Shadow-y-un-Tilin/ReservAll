@@ -259,7 +259,7 @@ class _BusinessMapScreenState extends State<BusinessMapScreen> {
       );
 
       if (!mounted) return;
-      if (routeInfo != null && routeInfo.points.length >= 2) {
+      if (routeInfo.points.length >= 2) {
         final effectiveMeters = mode == _TravelMode.driving
             ? routeInfo.distanceMeters
             : routeInfo.distanceMeters * mode.fallbackDistanceFactor;

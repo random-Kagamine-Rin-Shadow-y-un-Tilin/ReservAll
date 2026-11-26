@@ -51,24 +51,64 @@ class _ProfessionalsScreenState extends State<ProfessionalsScreen> {
                   ),
                   title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(p.especialidad ?? 'Sin especialidad'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: AppColors.error),
-                    onPressed: () async {
-                      final ok = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('¿Eliminar?'),
-                          content: Text('Se eliminará a ${p.nombre}'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar', style: TextStyle(color: AppColors.error))),
-                          ],
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.edit,
+                          color: AppColors.primary,
                         ),
-                      );
-                      if (ok == true) {
-                        await controller.deleteProfessional(widget.shopId, p.idProfesional);
-                      }
-                    },
+                        tooltip: 'Editar',
+                        onPressed: () async {
+                          final result = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddProfessionalScreen(
+                                shopId: widget.shopId,
+                                professional: p,
+                              ),
+                            ),
+                          );
+                          if (result == true && context.mounted) {
+                            context
+                                .read<ProfesionalController>()
+                                .loadProfessionals(widget.shopId);
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: AppColors.error),
+                        onPressed: () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('¿Eliminar?'),
+                              content: Text('Se eliminará a ${p.nombre}'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancelar'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text(
+                                    'Eliminar',
+                                    style: TextStyle(color: AppColors.error),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (ok == true) {
+                            await controller.deleteProfessional(
+                              widget.shopId,
+                              p.idProfesional,
+                            );
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -84,6 +124,7 @@ class _ProfessionalsScreenState extends State<ProfessionalsScreen> {
             MaterialPageRoute(builder: (_) => AddProfessionalScreen(shopId: widget.shopId)),
           );
           if (result == true) {
+            if (!context.mounted) return;
             context.read<ProfesionalController>().loadProfessionals(widget.shopId);
           }
         },

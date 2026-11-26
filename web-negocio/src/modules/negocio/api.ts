@@ -183,27 +183,19 @@ export async function createSchedule(
   shopId: number,
   payload: SchedulePayload,
 ): Promise<Schedule> {
-  const created = await jsonRequest<Schedule>(
+  return jsonRequest<Schedule>(
     `/shop/register-schedule/${shopId}`,
     "POST",
     {
       dia: payload.dia,
       hora_apertura: payload.hora_apertura,
       hora_cierre: payload.hora_cierre,
+      hora_descanso: payload.hora_descanso ?? null,
+      descanso_duracion_min: payload.descanso_duracion_min ?? 60,
+      estado_horario: payload.estado_horario ?? true,
     },
     "No pudimos registrar el horario.",
   );
-
-  // El endpoint de alta no acepta hora de descanso; se aplica con la edición.
-  if (payload.hora_descanso) {
-    return editSchedule(shopId, created.id_horario, {
-      hora_apertura: payload.hora_apertura,
-      hora_cierre: payload.hora_cierre,
-      hora_descanso: payload.hora_descanso,
-    });
-  }
-
-  return created;
 }
 
 export function editSchedule(

@@ -127,7 +127,7 @@ def _block_reason(bloqueos: Iterable) -> Optional[str]:
 
 
 def _build_day_availability(
-    horario,
+    horarios,
     reservas: Iterable,
     bloqueos: Iterable,
     *,
@@ -136,47 +136,56 @@ def _build_day_availability(
     intervalo_min: int,
     descanso_min: int,
 ) -> list[AgendaSlotOut]:
-    if horario is None or not horario["estado_horario"]:
-        return []
-    if _is_full_day_block(bloqueos):
+    if not horarios or _is_full_day_block(bloqueos):
         return []
 
-    apertura = to_minutes(horario["hora_apertura"])
-    cierre = to_minutes(horario["hora_cierre"])
-    descanso = (
-        to_minutes(horario["hora_descanso"])
-        if horario["hora_descanso"] is not None
-        else None
-    )
-
-    slots = build_slots(
-        apertura_min=apertura,
-        cierre_min=cierre,
-        duracion_min=duracion_min,
-        intervalo_min=intervalo_min,
-        descanso_min=descanso,
-        descanso_duracion_min=descanso_min,
-        reservas=_reservation_intervals(reservas),
-        bloqueos=_block_intervals(bloqueos),
-    )
     ahora = datetime.now()
     limite = ahora.time() if fecha == ahora.date() else None
     if fecha < ahora.date():
         limite = time(23, 59, 59)
 
-    return [
-        AgendaSlotOut(
-            hora_inicio=slot.hora_inicio,
-            hora_fin=slot.hora_fin,
-            disponible=slot.disponible and (limite is None or slot.hora_inicio > limite),
-            motivo=(
-                slot.motivo
-                if slot.motivo is not None
-                else ("pasado" if limite is not None and slot.hora_inicio <= limite else None)
-            ),
+    resultado: list[AgendaSlotOut] = []
+    for horario in horarios:
+        if not horario["estado_horario"]:
+            continue
+
+        apertura = to_minutes(horario["hora_apertura"])
+        cierre = to_minutes(horario["hora_cierre"])
+        descanso = (
+            to_minutes(horario["hora_descanso"])
+            if horario["hora_descanso"] is not None
+            else None
         )
-        for slot in slots
-    ]
+
+        slots = build_slots(
+            apertura_min=apertura,
+            cierre_min=cierre,
+            duracion_min=duracion_min,
+            intervalo_min=intervalo_min,
+            descanso_min=descanso,
+            descanso_duracion_min=(
+                horario["descanso_duracion_min"]
+                if horario.get("descanso_duracion_min") is not None
+                else descanso_min
+            ),
+            reservas=_reservation_intervals(reservas),
+            bloqueos=_block_intervals(bloqueos),
+        )
+        resultado.extend(
+            AgendaSlotOut(
+                hora_inicio=slot.hora_inicio,
+                hora_fin=slot.hora_fin,
+                disponible=slot.disponible and (limite is None or slot.hora_inicio > limite),
+                motivo=(
+                    slot.motivo
+                    if slot.motivo is not None
+                    else ("pasado" if limite is not None and slot.hora_inicio <= limite else None)
+                ),
+            )
+            for slot in slots
+        )
+
+    return resultado
 
 
 def _agenda_summary(
@@ -254,7 +263,9 @@ async def get_agenda(
     schedule_rows = await schedule_repo.get_weekly_schedule(
         pool, shop_id, include_inactive=True
     )
-    schedule_by_day = {row["dia"]: row for row in schedule_rows}
+    schedule_by_day: dict[str, list] = {}
+    for row in schedule_rows:
+        schedule_by_day.setdefault(row["dia"], []).append(row)
 
     # Se traen todas las reservas del rango para poder mostrar solo las del
     # profesional filtrado, pero bloqueando también las que no tienen
@@ -281,7 +292,7 @@ async def get_agenda(
     for offset in range(dias):
         current = desde + timedelta(days=offset)
         dia_key = day_for_date(current)
-        horario = schedule_by_day.get(dia_key)
+        horarios = schedule_by_day.get(dia_key, [])
         day_blocks = blocks_by_date.get(current, [])
         all_day_reservations = sorted(
             reservations_by_date.get(current, []),
@@ -301,16 +312,13 @@ async def get_agenda(
         ]
 
         full_day_block = _is_full_day_block(day_blocks)
-        horario_valido = (
-            horario is not None
-            and to_minutes(horario["hora_cierre"])
-            > to_minutes(horario["hora_apertura"])
-        )
-        abierto = bool(
-            horario_valido
-            and horario["estado_horario"]
-            and not full_day_block
-        )
+        horarios_activos = [
+            item
+            for item in horarios
+            if item["estado_horario"]
+            and to_minutes(item["hora_cierre"]) > to_minutes(item["hora_apertura"])
+        ]
+        abierto = bool(horarios_activos) and not full_day_block
 
         reservas_out = [
             OwnerReservationOut(**dict(reserva)) for reserva in day_reservations
@@ -323,11 +331,16 @@ async def get_agenda(
                 dia_semana=day_label(dia_key),
                 abierto=abierto,
                 bloqueado=full_day_block,
-                horario=ShopScheduleOut(**dict(horario)) if horario else None,
+                horario=(
+                    ShopScheduleOut(**dict(horarios_activos[0]))
+                    if horarios_activos
+                    else None
+                ),
+                horarios=[ShopScheduleOut(**dict(item)) for item in horarios],
                 reservas=reservas_out,
                 bloqueos=[BlockOut(**dict(b)) for b in day_blocks],
                 disponibilidad=_build_day_availability(
-                    horario,
+                    horarios_activos,
                     blocking_reservations,
                     day_blocks,
                     fecha=current,

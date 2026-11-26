@@ -2,9 +2,24 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '/models/shop.dart';
 
-const String baseUrl = "http://10.0.0.6:8000/api/v1";
-const String apiKey =
-    "25c78a3206e58231c87783cdbc8359584767c6718f1fcaedb9a406c5a6971e4c";
+const String serverUrl = "http://10.0.0.6:8000";
+const String baseUrl = "$serverUrl/api/v1";
+const String apiKey = "25c78a3206e58231c87783cdbc8359584767c6718f1fcaedb9a406c5a6971e4c";
+
+/// Convierte el valor de imagen que entrega el backend en una URL usable.
+/// Acepta URLs absolutas, rutas absolutas (`/...`) y nombres de archivo.
+String resolveImageUrl(dynamic rawImage) {
+  if (rawImage == null) return '';
+  final img = rawImage.toString().trim();
+  if (img.isEmpty || img.toLowerCase() == 'null') return '';
+  if (img.startsWith("http://") || img.startsWith("https://")) {
+    return img;
+  }
+  if (img.startsWith("/")) {
+    return "$serverUrl$img";
+  }
+  return "$serverUrl/static/$img";
+}
 
 Map<String, String> get _jsonHeaders => {
   "accept": "application/json",

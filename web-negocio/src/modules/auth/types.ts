@@ -17,3 +17,26 @@ export interface LoginPayLoad{
     correo: string
     password: string
 }
+
+export interface PasswordResetRequestOut{
+    mensaje: string
+    expira_en_minutos: number
+    // Solo disponible en desarrollo cuando PASSWORD_RESET_RETURN_CODE=true.
+    codigo?: string | null
+}
+
+export interface PasswordResetConfirmPayload{
+    correo: string
+    codigo: string
+    nueva_password: string
+    confirm_password: string
+}
+
+// HU_05: el id del usuario siempre se toma del token en el backend.
+export interface ProfileUpdatePayload{
+    nombre?: string
+    correo?: string
+    password_actual?: string
+    password_nueva?: string
+    confirm_password?: string
+}

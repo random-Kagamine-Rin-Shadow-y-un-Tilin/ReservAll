@@ -3,9 +3,7 @@ class Validators {
     if (value == null || value.isEmpty) {
       return 'El correo electrónico es obligatorio';
     }
-    final emailRegex = RegExp(
-      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-    );
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegex.hasMatch(value)) {
       return 'Ingresa un correo electrónico válido';
     }
@@ -18,6 +16,26 @@ class Validators {
     }
     if (value.length < 6) {
       return 'La contraseña debe tener al menos 6 caracteres';
+    }
+    return null;
+  }
+
+  // HU_03 / HU_05: misma política que el backend (mínimo 8, mayúscula,
+  // minúscula y número).
+  static String? strongPassword(String? value) {
+    final error = password(value);
+    if (error != null) return error;
+    if (value!.length < 8) {
+      return 'La contraseña debe tener al menos 8 caracteres';
+    }
+    if (!value.contains(RegExp(r'[A-Z]'))) {
+      return 'Debe incluir al menos una mayúscula';
+    }
+    if (!value.contains(RegExp(r'[a-z]'))) {
+      return 'Debe incluir al menos una minúscula';
+    }
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      return 'Debe incluir al menos un número';
     }
     return null;
   }

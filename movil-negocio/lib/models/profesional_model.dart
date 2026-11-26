@@ -42,3 +42,21 @@ class ProfessionalCreateRequest {
     'especialidad': especialidad
   };
 }
+
+class ProfessionalUpdateRequest {
+  final String? nombre;
+  final String? especialidad;
+  final bool? activo;
+
+  ProfessionalUpdateRequest({
+    this.nombre,
+    this.especialidad,
+    this.activo,
+  });
+
+  Map<String, dynamic> toJson() => {
+        if (nombre != null) 'nombre': nombre,
+        if (especialidad != null) 'especialidad': especialidad,
+        if (activo != null) 'activo': activo,
+      };
+}

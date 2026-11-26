@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import '../models/address_model.dart';
 import '../models/shop_model.dart';
 import 'api_service.dart';
 
@@ -175,7 +176,33 @@ class ShopService {
         if (response.data is! Map<String, dynamic>) {
           throw Exception('Formato de respuesta inválido');
         }
-        return ShopFullProfile.fromJson(response.data as Map<String, dynamic>);
+        final profile = ShopFullProfile.fromJson(
+          response.data as Map<String, dynamic>,
+        );
+
+        // El perfil completo del backend no incluye id_social. Se obtienen los
+        // contactos desde el endpoint dedicado para poder editarlos/borrarlos.
+        try {
+          final contactsResponse = await _apiService.get(
+            '/shop/get-contacts/$shopId',
+            requiresAuth: true,
+          );
+          final contactsData = contactsResponse.data;
+          if (contactsData is List) {
+            return ShopFullProfile(
+              general: profile.general,
+              contacts: contactsData
+                  .whereType<Map<String, dynamic>>()
+                  .map(ShopContact.fromJson)
+                  .toList(),
+              schedules: profile.schedules,
+            );
+          }
+        } catch (_) {
+          // Si falla, se conservan los contactos del perfil completo.
+        }
+
+        return profile;
       } else {
         final errorData = response.data as Map<String, dynamic>?;
         throw Exception(errorData?['detail'] ?? 'Error al obtener el negocio');
@@ -296,12 +323,16 @@ class ShopService {
     String? horaApertura,
     String? horaCierre,
     String? horaDescanso,
+    int? descansoDuracionMin,
     bool? estadoHorario,
   }) async {
     final body = <String, dynamic>{};
     if (horaApertura != null) body['hora_apertura'] = horaApertura;
     if (horaCierre != null) body['hora_cierre'] = horaCierre;
     if (horaDescanso != null) body['hora_descanso'] = horaDescanso;
+    if (descansoDuracionMin != null) {
+      body['descanso_duracion_min'] = descansoDuracionMin;
+    }
     if (estadoHorario != null) body['estado_horario'] = estadoHorario;
 
     final response = await _apiService.put(
@@ -395,5 +426,121 @@ class ShopService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  // ==================== INFORMACIÓN GENERAL ====================
+
+  /// GET /shop/get-general/{shopId}
+  Future<Shop> getGeneral(int shopId) async {
+    final response = await _apiService.get(
+      '/shop/get-general/$shopId',
+      requiresAuth: true,
+    );
+    return Shop.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// GET /shop/get-schedule/{shopId}
+  Future<List<ShopSchedule>> getSchedule(
+    int shopId, {
+    bool includeInactive = true,
+  }) async {
+    final response = await _apiService.get(
+      '/shop/get-schedule/$shopId',
+      queryParams: {'include_inactive': includeInactive},
+      requiresAuth: true,
+    );
+    final data = response.data;
+    if (data is! List) {
+      throw Exception('Formato de respuesta inválido');
+    }
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(ShopSchedule.fromJson)
+        .toList();
+  }
+
+  /// POST /shop/register-schedule/{shopId}
+  Future<ShopSchedule> registerSchedule(
+    int shopId, {
+    required String dia,
+    required String horaApertura,
+    required String horaCierre,
+    String? horaDescanso,
+    int descansoDuracionMin = 60,
+    bool estadoHorario = true,
+  }) async {
+    final response = await _apiService.post(
+      '/shop/register-schedule/$shopId',
+      body: {
+        'dia': dia,
+        'hora_apertura': horaApertura,
+        'hora_cierre': horaCierre,
+        'hora_descanso': horaDescanso,
+        'descanso_duracion_min': descansoDuracionMin,
+        'estado_horario': estadoHorario,
+      },
+      requiresAuth: true,
+    );
+    return ShopSchedule.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  // ==================== DIRECCIÓN ====================
+
+  /// GET /shop/get-address/{shopId}
+  Future<ShopAddress> getAddress(int shopId) async {
+    final response = await _apiService.get(
+      '/shop/get-address/$shopId',
+      requiresAuth: true,
+    );
+    return ShopAddress.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// POST /shop/register-address/{shopId}
+  Future<ShopAddress> registerAddress(
+    int shopId,
+    ShopAddressCreateRequest request,
+  ) async {
+    final response = await _apiService.post(
+      '/shop/register-address/$shopId',
+      body: request.toJson(),
+      requiresAuth: true,
+    );
+    return ShopAddress.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// PUT /shop/edit-address/{shopId}
+  Future<ShopAddress> editAddress(
+    int shopId,
+    ShopAddressUpdateRequest request,
+  ) async {
+    final response = await _apiService.put(
+      '/shop/edit-address/$shopId',
+      body: request.toJson(),
+      requiresAuth: true,
+    );
+    return ShopAddress.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  // ==================== VISIBILIDAD PÚBLICA ====================
+
+  /// GET /client/list-shops
+  ///
+  /// El backend no expone `estado_negocio` en `/shop/my-shops`, por lo que la
+  /// visibilidad se deduce comparando con el listado público de negocios.
+  Future<List<int>> getPublicShopIds() async {
+    final response = await _apiService.get(
+      '/client/list-shops',
+      queryParams: {'limit': 200},
+      requiresAuth: true,
+    );
+    final data = response.data;
+    if (data is! List) {
+      throw Exception('Formato de respuesta inválido');
+    }
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map((shop) => int.tryParse('${shop['id']}'))
+        .whereType<int>()
+        .toList();
   }
 }

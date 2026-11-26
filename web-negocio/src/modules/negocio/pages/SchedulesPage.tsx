@@ -38,10 +38,12 @@ export function SchedulesPage() {
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Schedule | null>(null);
+  const [creatingDay, setCreatingDay] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Schedule | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedShopId) {
@@ -76,14 +78,22 @@ export function SchedulesPage() {
     setReloadKey((key) => key + 1);
   }
 
-  function openCreate() {
+  function openCreate(day?: string) {
     setEditing(null);
+    setCreatingDay(day ?? null);
+    setNotice(null);
     setModalOpen(true);
   }
 
   function openEdit(entry: Schedule) {
     setEditing(entry);
+    setNotice(null);
     setModalOpen(true);
+  }
+
+  function handleSaved(message: string) {
+    setNotice(message);
+    void reload();
   }
 
   async function handleDelete() {
@@ -93,6 +103,7 @@ export function SchedulesPage() {
     try {
       await deleteSchedule(selectedShopId, toDelete.id_horario);
       setToDelete(null);
+      setNotice("Turno eliminado correctamente.");
       await reload();
     } catch (err) {
       setDeleteError(
@@ -123,40 +134,49 @@ export function SchedulesPage() {
   }
 
   const today = todayValue();
-  const existingDays = schedule.map((entry) => entry.dia);
+  const configuredDays = new Set(schedule.map((entry) => entry.dia)).size;
+  const activeShifts = schedule.filter((entry) => entry.estado_horario !== false);
 
   return (
     <div>
       <PageHeader
         eyebrow="Disponibilidad"
         title="Horarios"
-        description="Define los días y horas en que tu negocio atiende. Esta información se usará para calcular los espacios reservables."
+        description="Define los turnos de atención por día. Puedes tener varios turnos por día siempre que no se solapen, y desactivarlos sin borrarlos."
         actions={
-          <Button
-            leftIcon={<LuPlus size={16} />}
-            onClick={openCreate}
-            disabled={schedule.length >= 7}
-          >
-            Añadir horario
+          <Button leftIcon={<LuPlus size={16} />} onClick={() => openCreate()}>
+            Añadir turno
           </Button>
         }
       />
+
+      {notice && (
+        <div className="mb-5 rounded-xl border border-success/20 bg-success-tint px-4 py-3 text-sm font-medium text-success">
+          {notice}
+        </div>
+      )}
 
       {error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="primary">{schedule.length} de 7 días</Badge>
-            {schedule.length === 7 ? (
+            <Badge tone="primary">{configuredDays} de 7 días</Badge>
+            <Badge tone="secondary">{schedule.length} turnos configurados</Badge>
+            {configuredDays === 7 ? (
               <Badge tone="success" dot>
                 Semana completa
               </Badge>
             ) : (
               <Badge tone="gold">
-                {7 - schedule.length === 1
+                {7 - configuredDays === 1
                   ? "Falta 1 día por configurar"
-                  : `Faltan ${7 - schedule.length} días por configurar`}
+                  : `Faltan ${7 - configuredDays} días por configurar`}
+              </Badge>
+            )}
+            {activeShifts.length !== schedule.length && (
+              <Badge tone="neutral">
+                {schedule.length - activeShifts.length} turnos inactivos
               </Badge>
             )}
           </div>
@@ -164,8 +184,9 @@ export function SchedulesPage() {
           <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface/70 px-4 py-3">
             <LuInfo size={17} className="mt-0.5 shrink-0 text-primary" />
             <p className="text-xs leading-relaxed text-secondary-text">
-              La hora de descanso es opcional y sirve para bloquear un receso dentro del
-              horario de atención.
+              Un mismo día puede tener mañana y tarde como turnos independientes.
+              Configura la duración del descanso y desactiva un turno para cerrarlo
+              temporalmente sin perderlo.
             </p>
           </div>
 
@@ -178,7 +199,7 @@ export function SchedulesPage() {
                 <Button
                   size="sm"
                   leftIcon={<LuPlus size={15} />}
-                  onClick={openCreate}
+                  onClick={() => openCreate()}
                 >
                   Configurar horario
                 </Button>
@@ -187,21 +208,28 @@ export function SchedulesPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {WEEK_DAYS.map((day) => {
-                const entry = schedule.find((item) => item.dia === day.value);
+                const entries = schedule
+                  .filter((item) => item.dia === day.value)
+                  .sort((a, b) => a.hora_apertura.localeCompare(b.hora_apertura));
                 const isToday = day.value === today;
+                const dayActive = entries.some(
+                  (entry) => entry.estado_horario !== false,
+                );
 
                 return (
                   <Card
                     key={day.value}
                     className={`p-5 transition-shadow ${
-                      entry ? "hover:shadow-lift" : "border-dashed bg-surface/50"
+                      entries.length
+                        ? "hover:shadow-lift"
+                        : "border-dashed bg-surface/50"
                     } ${isToday ? "ring-2 ring-primary-soft/40" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
                         <span
                           className={`flex size-10 items-center justify-center rounded-xl font-display text-xs font-extrabold ${
-                            entry
+                            entries.length
                               ? "bg-primary-tint text-primary"
                               : "bg-surface-muted text-secondary-text"
                           }`}
@@ -218,68 +246,89 @@ export function SchedulesPage() {
                             </p>
                           ) : (
                             <p className="text-[10px] text-secondary-text">
-                              {entry ? "Día laboral" : "Sin configurar"}
+                              {entries.length
+                                ? `${entries.length} ${entries.length === 1 ? "turno" : "turnos"}`
+                                : "Sin configurar"}
                             </p>
                           )}
                         </div>
                       </div>
-                      {entry ? (
+                      {dayActive ? (
                         <Badge tone="success" dot>
                           Abierto
                         </Badge>
                       ) : (
-                        <Badge tone="neutral">Cerrado</Badge>
+                        <Badge tone="neutral">
+                          {entries.length ? "Cerrado" : "Sin horario"}
+                        </Badge>
                       )}
                     </div>
 
-                    {entry ? (
-                      <>
-                        <div className="mt-4 rounded-xl bg-surface px-3 py-2.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-secondary-text">
-                            Horario de atención
-                          </p>
-                          <p className="mt-0.5 font-display text-lg font-extrabold text-foreground">
-                            {formatTime(entry.hora_apertura)} –{" "}
-                            {formatTime(entry.hora_cierre)}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-secondary-text">
-                            Descanso:{" "}
-                            {entry.hora_descanso
-                              ? formatTime(entry.hora_descanso)
-                              : "Sin descanso"}
-                          </p>
-                        </div>
-
-                        <div className="mt-3 flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            leftIcon={<LuPencil size={13} />}
-                            onClick={() => openEdit(entry)}
+                    {entries.length ? (
+                      <div className="mt-4 space-y-3">
+                        {entries.map((entry) => (
+                          <div
+                            key={entry.id_horario}
+                            className="rounded-xl bg-surface px-3 py-2.5"
                           >
-                            Editar
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="ml-auto text-error/80 hover:bg-error-tint hover:text-error"
-                            leftIcon={<LuTrash2 size={13} />}
-                            onClick={() => {
-                              setDeleteError(null);
-                              setToDelete(entry);
-                            }}
-                          >
-                            Eliminar
-                          </Button>
-                        </div>
-                      </>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-display text-lg font-extrabold text-foreground">
+                                {formatTime(entry.hora_apertura)} –{" "}
+                                {formatTime(entry.hora_cierre)}
+                              </p>
+                              <Badge
+                                tone={entry.estado_horario === false ? "neutral" : "success"}
+                              >
+                                {entry.estado_horario === false ? "Inactivo" : "Activo"}
+                              </Badge>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-secondary-text">
+                              Descanso:{" "}
+                              {entry.hora_descanso
+                                ? `${formatTime(entry.hora_descanso)} · ${entry.descanso_duracion_min ?? 60} min`
+                                : "Sin descanso"}
+                            </p>
+                            <div className="mt-2 flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                leftIcon={<LuPencil size={13} />}
+                                onClick={() => openEdit(entry)}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-auto text-error/80 hover:bg-error-tint hover:text-error"
+                                leftIcon={<LuTrash2 size={13} />}
+                                onClick={() => {
+                                  setDeleteError(null);
+                                  setToDelete(entry);
+                                }}
+                              >
+                                Eliminar
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          leftIcon={<LuPlus size={14} />}
+                          onClick={() => openCreate(day.value)}
+                        >
+                          Añadir otro turno
+                        </Button>
+                      </div>
                     ) : (
                       <Button
                         variant="outline"
                         size="sm"
                         className="mt-4 w-full"
                         leftIcon={<LuPlus size={14} />}
-                        onClick={openCreate}
+                        onClick={() => openCreate(day.value)}
                       >
                         Configurar {day.label}
                       </Button>
@@ -298,8 +347,12 @@ export function SchedulesPage() {
           onClose={() => setModalOpen(false)}
           shopId={selectedShopId}
           schedule={editing}
-          existingDays={existingDays}
-          onSaved={reload}
+          initialDay={creatingDay}
+          onSaved={() =>
+            handleSaved(
+              editing ? "Turno actualizado correctamente." : "Turno registrado correctamente.",
+            )
+          }
         />
       )}
 

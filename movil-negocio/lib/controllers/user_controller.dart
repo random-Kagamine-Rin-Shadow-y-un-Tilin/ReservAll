@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../models/auth_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 
 class UserController extends ChangeNotifier {
   final ApiService _apiService = ApiService();
-  
+
   User? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -21,15 +22,11 @@ class UserController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _apiService.get(
-        '/profile/me',
-        requiresAuth: true,
-      );
+      final response = await _apiService.get('/profile/me', requiresAuth: true);
 
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
-        
         if (response.data == null) {
           throw Exception('Respuesta vacía del servidor');
         }
@@ -39,7 +36,7 @@ class UserController extends ChangeNotifier {
         }
 
         final data = response.data as Map<String, dynamic>;
-        
+
         if (data['id'] != null) {
           _currentUser = User.fromJson(data);
         } else if (data['success'] == true && data['data'] != null) {
@@ -62,23 +59,23 @@ class UserController extends ChangeNotifier {
     }
   }
 
-  // Actualizar perfil
-  Future<bool> updateUserProfile(Map<String, dynamic> userData) async {
+  // HU_05: actualizar perfil propio (antes se llamaba a /profile/update,
+  // una ruta que el backend ya no expone).
+  Future<bool> updateUserProfile(ProfileUpdateRequest userData) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.put(
-        '/profile/update',
-        body: userData,
+      final response = await _apiService.patch(
+        '/profile/me',
+        body: userData.toJson(),
         requiresAuth: true,
       );
 
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300) {
-        
         if (response.data == null) {
           throw Exception('Respuesta vacía del servidor');
         }
@@ -88,7 +85,7 @@ class UserController extends ChangeNotifier {
         }
 
         final data = response.data as Map<String, dynamic>;
-        
+
         if (data['id'] != null) {
           _currentUser = User.fromJson(data);
         } else if (data['success'] == true && data['data'] != null) {

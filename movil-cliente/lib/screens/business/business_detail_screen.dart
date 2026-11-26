@@ -1,6 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '/models/shop.dart';
 import '/services/api_service.dart';
 import '/services/service_description_helper.dart';
@@ -101,6 +101,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         }
 
         final exists = favs.any((item) {
+          if (item is! Map) return false;
           final id = item['id'] ?? item['id_negocio'] ?? item['business_id'];
           return id.toString() == shopId.toString();
         });
@@ -112,7 +113,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         }
       }
     } catch (e) {
-      print("Error al verificar favorito desde Supabase: $e");
+      debugPrint("Error al verificar favorito desde Supabase: $e");
     }
   }
 
@@ -131,42 +132,43 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        if (!mounted) return;
         setState(() {
           isFavorite = !isFavorite;
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isFavorite ? "Añadido a favoritos" : "Eliminado de favoritos",
-              ),
-              backgroundColor: primaryColor,
-              duration: const Duration(seconds: 1),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isFavorite ? "Añadido a favoritos" : "Eliminado de favoritos",
             ),
-          );
-        }
+            backgroundColor: primaryColor,
+            duration: const Duration(seconds: 1),
+          ),
+        );
       } else {
-        print(
+        debugPrint(
           "Error del servidor al modificar favorito: ${response.statusCode} - ${response.body}",
         );
       }
     } catch (e) {
-      print("Error de conexión al modificar favorito: $e");
+      debugPrint("Error de conexión al modificar favorito: $e");
     }
   }
 
-  String _getImageUrl(dynamic rawImage) {
-    if (rawImage == null) return '';
-    String img = rawImage.toString().trim();
-    if (img.isEmpty || img == 'null') return '';
-    if (img.startsWith("http://") || img.startsWith("https://")) {
-      return img;
-    }
-    if (img.startsWith("/")) {
-      return "$baseUrl$img";
-    }
-    return "$baseUrl/static/$img";
+  void _openBusinessMap(Shop currentShop, String? addressText) {
+    if (!currentShop.hasCoordinates) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BusinessMapScreen(
+          shop: currentShop,
+          formattedAddress: addressText,
+        ),
+      ),
+    );
   }
+
+  String _getImageUrl(dynamic rawImage) => resolveImageUrl(rawImage);
 
   String _dayLabel(String? value) {
     if (value == null || value.trim().isEmpty) return '';
@@ -390,7 +392,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
         child: Image.network(
           imageUrl,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) =>
+          errorBuilder: (_, _, _) =>
               Center(child: Icon(Icons.store, size: 64, color: primaryColor)),
         ),
       ),
@@ -531,17 +533,7 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BusinessMapScreen(
-                          shop: currentShop,
-                          formattedAddress: addressText,
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: () => _openBusinessMap(currentShop, addressText),
                   icon: const Icon(Icons.map_outlined, size: 18),
                   label: const Text("Ver en mapa"),
                 ),
@@ -601,7 +593,11 @@ class _BusinessDetailScreenState extends State<BusinessDetailScreen> {
                         ),
                   trailing: Text(
                     "${_timeLabel(horario['hora_apertura'])} - ${_timeLabel(horario['hora_cierre'])}",
-                    style: TextStyle(color: textMainColor),
+                    style: TextStyle(
+                      color: textMainColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 );
               }).toList(),

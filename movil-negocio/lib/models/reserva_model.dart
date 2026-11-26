@@ -61,8 +61,12 @@ class ReservaListItem {
         clienteCorreo: j['cliente_correo']?.toString() ?? '',
         servicioId: int.tryParse('${j['servicio_id']}') ?? 0,
         servicioNombre: j['servicio_nombre']?.toString() ?? '',
-        servicioDuracion: int.tryParse('${j['servicio_duracion']}') ?? 0,
-        servicioPrecio: double.tryParse('${j['servicio_precio']}') ?? 0.0,
+        servicioDuracion: int.tryParse(
+              '${j['duracion_minutos'] ?? j['servicio_duracion']}',
+            ) ??
+            0,
+        servicioPrecio:
+            double.tryParse('${j['precio'] ?? j['servicio_precio']}') ?? 0.0,
         profesionalId: j['profesional_id'] == null
             ? null
             : int.tryParse('${j['profesional_id']}'),
@@ -100,15 +104,22 @@ class ReservasListResponse {
     required this.items,
   });
 
-  factory ReservasListResponse.fromJson(Map<String, dynamic> j) =>
-      ReservasListResponse(
-        total: int.tryParse('${j['total']}') ?? 0,
-        limit: int.tryParse('${j['limit']}') ?? 20,
-        offset: int.tryParse('${j['offset']}') ?? 0,
-        items: (j['items'] as List? ?? [])
-            .map((e) => ReservaListItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+  factory ReservasListResponse.fromJson(Map<String, dynamic> j) {
+    final items = (j['items'] as List? ?? [])
+        .map((e) => ReservaListItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final summary = j['summary'];
+    final total = summary is Map
+        ? int.tryParse('${summary['total']}') ?? items.length
+        : int.tryParse('${j['total']}') ?? items.length;
+
+    return ReservasListResponse(
+      total: total,
+      limit: int.tryParse('${j['limit']}') ?? 20,
+      offset: int.tryParse('${j['offset']}') ?? 0,
+      items: items,
+    );
+  }
 }
 
 class ReservaDetalle {
@@ -163,8 +174,12 @@ class ReservaDetalle {
         clienteNombre: j['cliente_nombre']?.toString() ?? '',
         clienteCorreo: j['cliente_correo']?.toString() ?? '',
         servicioNombre: j['servicio_nombre']?.toString() ?? '',
-        servicioDuracion: int.tryParse('${j['servicio_duracion']}') ?? 0,
-        servicioPrecio: double.tryParse('${j['servicio_precio']}') ?? 0.0,
+        servicioDuracion: int.tryParse(
+              '${j['duracion_minutos'] ?? j['servicio_duracion']}',
+            ) ??
+            0,
+        servicioPrecio:
+            double.tryParse('${j['precio'] ?? j['servicio_precio']}') ?? 0.0,
         servicioCategoria: j['servicio_categoria']?.toString(),
         negocioId: int.tryParse('${j['negocio_id']}') ?? 0,
         negocioNombre: j['negocio_nombre']?.toString() ?? '',
@@ -173,5 +188,19 @@ class ReservaDetalle {
             : int.tryParse('${j['profesional_id']}'),
         profesionalNombre: j['profesional_nombre']?.toString(),
         profesionalEspecialidad: j['profesional_especialidad']?.toString(),
+      );
+}
+
+class ProfesionalItem {
+  final int id;
+  final String nombre;
+  final String? especialidad;
+
+  ProfesionalItem({required this.id, required this.nombre, this.especialidad});
+
+  factory ProfesionalItem.fromJson(Map<String, dynamic> j) => ProfesionalItem(
+        id: int.tryParse('${j['id_profesional']}') ?? 0,
+        nombre: j['nombre']?.toString() ?? '',
+        especialidad: j['especialidad']?.toString(),
       );
 }

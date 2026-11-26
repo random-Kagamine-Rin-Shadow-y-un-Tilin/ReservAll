@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../controllers/category_controller.dart';
 import '../../controllers/shop_controller.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
@@ -19,19 +20,19 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descripcionController = TextEditingController();
-  
+
   int? _selectedCategory;
   File? _imageFile;
   final ImagePicker _imagePicker = ImagePicker();
 
-  // Categorías predefinidas (sin endpoints)
-  final List<Map<String, dynamic>> _categories = [
-    {'id': 1, 'nombre': 'Barberia'},
-    {'id': 2, 'nombre': 'Spa'},
-    {'id': 3, 'nombre': 'Restaurante'},
-    {'id': 4, 'nombre': 'Bellezar'},
-    {'id': 5, 'nombre': 'Otros'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    // HU_14: el catálogo viene del backend, no de una lista hardcodeada.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CategoryController>().loadPublicCategories();
+    });
+  }
 
   @override
   void dispose() {
@@ -48,13 +49,14 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
         maxHeight: 1024,
         imageQuality: 80,
       );
-      
+
       if (image != null) {
         setState(() {
           _imageFile = File(image.path);
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al seleccionar imagen: $e')),
       );
@@ -232,12 +234,16 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       filled: true,
                       fillColor: Colors.grey.shade50,
                     ),
-                    items: _categories.map((category) {
-                      return DropdownMenuItem<int>(
-                        value: category['id'],
-                        child: Text(category['nombre']),
-                      );
-                    }).toList(),
+                    items: context
+                        .watch<CategoryController>()
+                        .publicCategories
+                        .map((category) {
+                          return DropdownMenuItem<int>(
+                            value: category.idCategoria,
+                            child: Text(category.nombreCategoria),
+                          );
+                        })
+                        .toList(),
                     onChanged: (value) {
                       setState(() {
                         _selectedCategory = value;
@@ -250,6 +256,21 @@ class _RegisterShopScreenState extends State<RegisterShopScreen> {
                       return null;
                     },
                   ),
+                  if (context
+                      .watch<CategoryController>()
+                      .publicCategories
+                      .isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        context.read<CategoryController>().errorMessage ??
+                            'Cargando categorías…',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 24),
 
                   CustomButton(

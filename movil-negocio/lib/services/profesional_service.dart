@@ -44,4 +44,18 @@ class ProfesionalService {
       throw Exception(errorData?['detail'] ?? 'Error al eliminar profesional');
     }
   }
+
+  /// PUT /professional/edit/{shopId}/{professionalId}
+  Future<Professional> editProfessional(
+    int shopId,
+    int professionalId,
+    ProfessionalUpdateRequest request,
+  ) async {
+    final response = await _apiService.put(
+      '/professional/edit/$shopId/$professionalId',
+      body: request.toJson(),
+      requiresAuth: true,
+    );
+    return Professional.fromJson(response.data as Map<String, dynamic>);
+  }
 }

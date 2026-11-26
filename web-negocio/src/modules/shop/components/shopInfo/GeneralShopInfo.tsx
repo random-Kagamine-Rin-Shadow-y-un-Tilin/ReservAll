@@ -16,8 +16,8 @@ export function GeneralShopInfo({shop}: {shop:ShopGeneralInfo},){
         try{
             const data = await getGeneral(Number(shopId))
             setGeneralInfo(data)
-        } catch(err){
-            console.error("Error")
+        } catch {
+            console.error("No pudimos actualizar la información del negocio.")
         }
     },[shopId])
 

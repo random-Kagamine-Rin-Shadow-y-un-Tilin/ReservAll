@@ -30,6 +30,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Future<void> fetchFavorites() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
     try {
       final headers = await _getHeaders();
@@ -38,22 +39,28 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         headers: headers,
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
           if (data is List) {
             favoritesList = data;
           } else if (data is Map) {
-            favoritesList = data['favorites'] ?? data['data'] ?? [];
+            final rawList = data['favorites'] ?? data['data'] ?? [];
+            favoritesList = rawList is List ? rawList : [];
           } else {
             favoritesList = [];
           }
         });
       } else {
-        print("Error al cargar favoritos: ${response.statusCode}");
+        debugPrint("Error al cargar favoritos: ${response.statusCode}");
+        setState(() => favoritesList = []);
       }
     } catch (e) {
-      print("Error de conexión al cargar favoritos: $e");
+      debugPrint("Error de conexión al cargar favoritos: $e");
+      if (!mounted) return;
+      setState(() => favoritesList = []);
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
@@ -70,25 +77,64 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         body: jsonEncode({"id_negocio": shopId}),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         setState(() {
-          favoritesList.removeAt(index);
+          final id = shopId?.toString();
+          final removedById = id != null &&
+              favoritesList.any(
+                (item) =>
+                    item is Map &&
+                    (item['id'] ?? item['id_negocio'] ?? item['business_id'])
+                            ?.toString() ==
+                        id,
+              );
+          if (removedById) {
+            favoritesList.removeWhere(
+              (item) =>
+                  item is Map &&
+                  (item['id'] ?? item['id_negocio'] ?? item['business_id'])
+                          ?.toString() ==
+                      id,
+            );
+          } else if (index >= 0 && index < favoritesList.length) {
+            favoritesList.removeAt(index);
+          }
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Eliminado de favoritos"),
-              backgroundColor: Color(0xFFE2725B),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Eliminado de favoritos"),
+            backgroundColor: Color(0xFFE2725B),
+            duration: Duration(seconds: 1),
+          ),
+        );
       } else {
-        print("Error al eliminar favorito: ${response.statusCode}");
+        debugPrint("Error al eliminar favorito: ${response.statusCode}");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("No se pudo eliminar el favorito."),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
-      print("Error de conexión al eliminar favorito: $e");
+      debugPrint("Error de conexión al eliminar favorito: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Error de conexión al eliminar el favorito."),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
+  }
+
+  String _textValue(dynamic value, [String fallback = '']) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    if (text.isEmpty || text.toLowerCase() == 'null') return fallback;
+    return text;
   }
 
   @override
@@ -132,10 +178,22 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                     itemCount: favoritesList.length,
                     itemBuilder: (context, index) {
                       final item = favoritesList[index];
-                      final String nombre = item['nombre'] ?? item['nombre_negocio'] ?? 'Negocio';
-                      final String imagen = item['imagen_negocio'] ?? item['imagen'] ?? '';
-                      final String categoria = item['categoria'] ?? item['nombre_categoria'] ?? '';
-                      final shopId = item['id'] ?? item['id_negocio'] ?? item['business_id'];
+                      if (item is! Map) {
+                        return const SizedBox.shrink();
+                      }
+                      final String nombre = _textValue(
+                        item['nombre'] ?? item['nombre_negocio'],
+                        'Negocio',
+                      );
+                      final String imagen = _textValue(
+                        item['imagen_negocio'] ?? item['imagen'],
+                      );
+                      final String categoria = _textValue(
+                        item['categoria'] ?? item['nombre_categoria'],
+                      );
+                      final shopId =
+                          item['id'] ?? item['id_negocio'] ?? item['business_id'];
+                      final imageUrl = resolveImageUrl(imagen);
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -145,9 +203,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                           contentPadding: const EdgeInsets.all(12),
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: imagen.isNotEmpty && imagen != "null"
+                            child: imageUrl.isNotEmpty
                                 ? Image.network(
-                                    imagen.startsWith("http") ? imagen : "$baseUrl/static/$imagen",
+                                    imageUrl,
                                     width: 60,
                                     height: 60,
                                     fit: BoxFit.cover,

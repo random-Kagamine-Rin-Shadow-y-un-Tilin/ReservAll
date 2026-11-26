@@ -25,6 +25,9 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
   late TimeOfDay _apertura;
   late TimeOfDay _cierre;
   TimeOfDay? _descanso;
+  late int _descansoDuracionMin;
+  late bool _estadoHorario;
+  late final TextEditingController _duracionController;
 
   @override
   void initState() {
@@ -38,6 +41,17 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
     if (widget.schedule.horaDescanso != null) {
       _descanso = _parseTime(widget.schedule.horaDescanso!);
     }
+    _descansoDuracionMin = widget.schedule.descansoDuracionMin;
+    _estadoHorario = widget.schedule.estadoHorario ?? true;
+    _duracionController = TextEditingController(
+      text: _descansoDuracionMin.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _duracionController.dispose();
+    super.dispose();
   }
 
   TimeOfDay? _parseTime(String time) {
@@ -83,6 +97,8 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
       horaApertura: _formatTime(_apertura),
       horaCierre: _formatTime(_cierre),
       horaDescanso: _descanso != null ? _formatTime(_descanso!) : null,
+      descansoDuracionMin: _descansoDuracionMin,
+      estadoHorario: _estadoHorario,
     );
 
     if (!mounted) return;
@@ -142,6 +158,31 @@ class _EditScheduleScreenState extends State<EditScheduleScreen> {
                     'Hora de descanso (opcional)',
                     _descanso ?? const TimeOfDay(hour: 14, minute: 0),
                     _pickDescanso,
+                  ),
+                  TextFormField(
+                    controller: _duracionController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Duración del descanso (minutos)',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      final parsed = int.tryParse(value ?? '');
+                      if (parsed == null || parsed < 0 || parsed > 240) {
+                        return 'Entre 0 y 240 minutos';
+                      }
+                      return null;
+                    },
+                    onChanged: (value) {
+                      _descansoDuracionMin = int.tryParse(value) ?? -1;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    title: const Text('Turno activo'),
+                    value: _estadoHorario,
+                    onChanged: (value) =>
+                        setState(() => _estadoHorario = value),
                   ),
                   const SizedBox(height: 24),
                   CustomButton(

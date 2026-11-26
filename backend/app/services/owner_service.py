@@ -10,6 +10,7 @@ from app.models.owner import (
     OwnerClientOut,
     OwnerReportOut,
     OwnerReservationOut,
+    PageMeta,
     ReportDailyPoint,
     ReportHourItem,
     ReportProfessionalItem,
@@ -83,6 +84,11 @@ def _summary(items: list) -> ReservationSummary:
     return summary
 
 
+def _page_meta(total: int, limit: int, offset: int) -> PageMeta:
+    pages = (total + limit - 1) // limit if limit > 0 else 0
+    return PageMeta(total=total, limit=limit, offset=offset, pages=pages)
+
+
 async def list_reservations(
     pool: asyncpg.Pool,
     shop_id: int,
@@ -92,6 +98,8 @@ async def list_reservations(
     estado: Optional[str] = None,
     profesional_id: Optional[int] = None,
     search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
 ):
     await _ensure_shop(pool, shop_id, current_user_id)
 
@@ -101,18 +109,25 @@ async def list_reservations(
             "La fecha inicial no puede ser posterior a la final.",
         )
 
-    rows = await repo.get_reservations(
-        pool,
-        shop_id,
+    filtros = dict(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         estado=estado,
         profesional_id=profesional_id,
         search=search,
     )
+    todas = await repo.get_reservations(pool, shop_id, **filtros)
+    rows = await repo.get_reservations(
+        pool, shop_id, limit=limit, offset=offset, **filtros
+    )
+    total = await repo.count_reservations(pool, shop_id, **filtros)
 
     items = [OwnerReservationOut(**dict(row)) for row in rows]
-    return ReservationListOut(items=items, summary=_summary(rows))
+    return ReservationListOut(
+        items=items,
+        summary=_summary(todas),
+        page=_page_meta(total, limit, offset),
+    )
 
 
 async def get_reservation(
@@ -338,6 +353,8 @@ async def list_reservation_history(
     estado: Optional[str] = None,
     profesional_id: Optional[int] = None,
     search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
 ):
     await _ensure_shop(pool, shop_id, current_user_id)
 
@@ -348,18 +365,25 @@ async def list_reservation_history(
         )
 
     estados = [estado] if estado else ["completada", "cancelada"]
-    rows = await repo.get_reservations(
-        pool,
-        shop_id,
+    filtros = dict(
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
         estados=estados,
         profesional_id=profesional_id,
         search=search,
     )
+    todas = await repo.get_reservations(pool, shop_id, **filtros)
+    rows = await repo.get_reservations(
+        pool, shop_id, limit=limit, offset=offset, **filtros
+    )
+    total = await repo.count_reservations(pool, shop_id, **filtros)
 
     items = [OwnerReservationOut(**dict(row)) for row in rows]
-    return ReservationListOut(items=items, summary=_summary(rows))
+    return ReservationListOut(
+        items=items,
+        summary=_summary(todas),
+        page=_page_meta(total, limit, offset),
+    )
 
 
 async def list_clients(
@@ -367,11 +391,20 @@ async def list_clients(
     shop_id: int,
     current_user_id: int,
     search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
 ):
     await _ensure_shop(pool, shop_id, current_user_id)
-    rows = await repo.get_clients(pool, shop_id, search=search)
+    rows = await repo.get_clients(
+        pool, shop_id, search=search, limit=limit, offset=offset
+    )
+    total = await repo.count_clients(pool, shop_id, search=search)
     items = [OwnerClientOut(**dict(row)) for row in rows]
-    return ClientListOut(items=items, total=len(items))
+    return ClientListOut(
+        items=items,
+        total=total,
+        page=_page_meta(total, limit, offset),
+    )
 
 
 async def get_client(

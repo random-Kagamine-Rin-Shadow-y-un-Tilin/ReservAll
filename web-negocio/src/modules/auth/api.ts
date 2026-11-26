@@ -1,5 +1,13 @@
 import { fetchWithAuth } from "../../lib/api";
-import type { User, RegisterPayload, LoginPayLoad } from "./types";
+import { jsonRequest } from "../../lib/request";
+import type {
+  PasswordResetConfirmPayload,
+  PasswordResetRequestOut,
+  ProfileUpdatePayload,
+  User,
+  RegisterPayload,
+  LoginPayLoad,
+} from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -46,6 +54,37 @@ export async function loginUser(payload:LoginPayLoad): Promise<User> {
 
 export async function logOut(): Promise<void> {
     await fetchWithAuth(`${API_URL}/auth/logout`, {method: 'POST'})
+}
+
+// HU_03: recuperación de contraseña
+export function requestPasswordReset(correo: string): Promise<PasswordResetRequestOut> {
+    return jsonRequest(
+        '/auth/forgot-password',
+        'POST',
+        { correo },
+        'No pudimos enviar el código de recuperación.',
+    )
+}
+
+export function confirmPasswordReset(
+    payload: PasswordResetConfirmPayload,
+): Promise<User> {
+    return jsonRequest(
+        '/auth/reset-password',
+        'POST',
+        payload,
+        'No pudimos actualizar tu contraseña.',
+    )
+}
+
+// HU_05: edición del perfil propio.
+export function updateProfile(payload: ProfileUpdatePayload): Promise<User> {
+    return jsonRequest(
+        '/profile/me',
+        'PATCH',
+        payload,
+        'No pudimos actualizar tu perfil.',
+    )
 }
 
 export async function getCurrentUser():Promise<User | null> {

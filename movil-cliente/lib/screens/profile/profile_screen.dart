@@ -20,8 +20,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   String email = '';
+  String _loadedName = '';
 
-  static const String _profileEndpoint = "$baseUrl/client/profile";
+  static const String _profileEndpoint = "$baseUrl/profile/me";
 
   final Color primaryColor = const Color(0xFFE2725B);
   final Color secondaryColor = const Color(0xFF2A9D8F);
@@ -101,6 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => isLoading = true);
 
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     final savedEmail =
         prefs.getString('user_email') ??
         prefs.getString('correo') ??
@@ -128,6 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _nameController.text = savedName;
       _phoneController.text = savedPhone;
       email = savedEmail;
+      _loadedName = savedName;
     });
 
     try {
@@ -138,6 +141,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
       debugPrint("GET perfil (${response.statusCode}): ${response.body}");
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -167,6 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               apiName != null &&
               apiName.isNotEmpty) {
             _nameController.text = apiName;
+            _loadedName = apiName;
           }
           if (savedPhone.isEmpty && apiPhone != null && apiPhone.isNotEmpty) {
             _phoneController.text = apiPhone;
@@ -181,6 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       debugPrint("Error GET perfil: $e");
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
@@ -191,77 +198,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final cleanName = _nameController.text.trim();
     final cleanPhone = _phoneController.text.trim();
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
 
     setState(() => isLoading = true);
     try {
-      final headers = await _getAuthHeaders();
-      final payload = <String, dynamic>{
-        "nombre": cleanName,
-        if (cleanPhone.isNotEmpty) "telefono": cleanPhone,
-      };
+      final nameChanged = cleanName != _loadedName;
 
-      final response = await http.put(
-        Uri.parse(_profileEndpoint),
-        headers: headers,
-        body: jsonEncode(payload),
-      );
-
-      setState(() => isLoading = false);
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        await _saveProfileLocally(prefs, cleanName, cleanPhone, email);
-
-        setState(() {
-          _nameController.text = cleanName;
-          _phoneController.text = cleanPhone;
-          isEditing = false;
-        });
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Perfil actualizado correctamente."),
-            backgroundColor: Colors.green,
-          ),
+      if (nameChanged) {
+        final headers = await _getAuthHeaders();
+        final response = await http.patch(
+          Uri.parse(_profileEndpoint),
+          headers: headers,
+          body: jsonEncode({"nombre": cleanName}),
         );
-      } else if (response.statusCode == 404 || response.statusCode == 405) {
-        await _saveProfileLocally(prefs, cleanName, cleanPhone, email);
-
-        setState(() {
-          _nameController.text = cleanName;
-          _phoneController.text = cleanPhone;
-          isEditing = false;
-        });
 
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Cambios guardados en el dispositivo (endpoint de perfil no disponible en el servidor).",
+
+        if (response.statusCode == 404 || response.statusCode == 405) {
+          await _saveProfileLocally(prefs, cleanName, cleanPhone, email);
+          if (!mounted) return;
+          setState(() {
+            _nameController.text = cleanName;
+            _phoneController.text = cleanPhone;
+            _loadedName = cleanName;
+            isEditing = false;
+            isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Cambios guardados en el dispositivo (endpoint de perfil no disponible en el servidor).",
+              ),
+              backgroundColor: Colors.orange,
             ),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      } else {
-        debugPrint(
-          "PUT perfil falló (${response.statusCode}): ${response.body}",
-        );
-        final errorMessage = _extractErrorMessage(
-          response,
-          "No se pudo actualizar el perfil",
-        );
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error: $errorMessage"),
-            backgroundColor: Colors.red,
-          ),
-        );
+          );
+          return;
+        }
+
+        if (response.statusCode != 200 && response.statusCode != 204) {
+          debugPrint(
+            "PATCH perfil falló (${response.statusCode}): ${response.body}",
+          );
+          final errorMessage = _extractErrorMessage(
+            response,
+            "No se pudo actualizar el perfil",
+          );
+          setState(() => isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error: $errorMessage"),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        _loadedName = cleanName;
       }
-    } catch (e) {
-      debugPrint("Excepción PUT perfil: $e");
-      setState(() => isLoading = false);
+
+      await _saveProfileLocally(prefs, cleanName, cleanPhone, email);
       if (!mounted) return;
+
+      setState(() {
+        _nameController.text = cleanName;
+        _phoneController.text = cleanPhone;
+        isEditing = false;
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            nameChanged
+                ? "Perfil actualizado correctamente."
+                : "Datos guardados en el dispositivo.",
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      debugPrint("Excepción PATCH perfil: $e");
+      if (!mounted) return;
+      setState(() => isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Error de conexión al actualizar el perfil."),
@@ -288,6 +306,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
             onPressed: () async {
               final prefs = await SharedPreferences.getInstance();
+              final cookie = prefs.getString('session_cookie');
+
+              if (cookie != null && cookie.isNotEmpty) {
+                try {
+                  await http.post(
+                    Uri.parse('$baseUrl/auth/logout'),
+                    headers: {
+                      'accept': 'application/json',
+                      'x-api-key': apiKey,
+                      'Cookie': cookie,
+                    },
+                  );
+                } catch (_) {
+                  // Si el servidor no responde, igualmente se limpia la sesión local.
+                }
+              }
+
               await prefs.remove('session_cookie');
               await prefs.remove('auth_token');
               await prefs.remove('token');
@@ -298,7 +333,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               await prefs.remove('user_email');
               await prefs.remove('correo');
 
-              if (!mounted) return;
+              if (!context.mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -339,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 20),
                     CircleAvatar(
                       radius: 50,
-                      backgroundColor: secondaryColor.withOpacity(0.2),
+                      backgroundColor: secondaryColor.withValues(alpha: 0.2),
                       child: Icon(
                         Icons.person,
                         size: 60,

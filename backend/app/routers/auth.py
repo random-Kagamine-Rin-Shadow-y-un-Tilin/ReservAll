@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Depends, Response, Cookie, HTTPException,  status
 import asyncpg
-from app.models.user import UserRegister, UserLogin, UserOut
-from app.services import auth_service
+from app.models.user import (
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    PasswordResetRequestOut,
+    UserRegister,
+    UserLogin,
+    UserOut,
+)
+from app.services import auth_service, password_service
 from app.core.dependencies import get_db_pool, verify_api_key
 from app.core.config import settings
 
@@ -12,8 +19,8 @@ def _set_auth_cookies(response: Response, access_token: str, resfresh_token: str
         key="SNRL_access_token",
         value=access_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
         max_age=settings.jwt_access_expire_minutes * 60,
         path="/",
     )
@@ -21,8 +28,8 @@ def _set_auth_cookies(response: Response, access_token: str, resfresh_token: str
         key="SNRL_refresh_token",
         value=resfresh_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
         max_age=settings.jwt_refresh_expire_days * 24 * 60 * 60,
         path="/api/v1/auth",
     )
@@ -46,7 +53,7 @@ async def refresh(
 ):
     if not refresh_token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "No hay refresh token.")
-    
+
     new_acces, new_refresh = await auth_service.refresh_access_token(pool, refresh_token)
     _set_auth_cookies(response, new_acces, new_refresh)
     return {"message": "Token renovado."}
@@ -61,3 +68,33 @@ async def logout(
     response.delete_cookie("SNRL_access_token", path="/")
     response.delete_cookie("SNRL_refresh_token", path="/api/v1/auth")
     return {"message": "Sesión cerrada."}
+
+
+# HU_03: recuperación de contraseña
+@router.post(
+    "/forgot-password",
+    response_model=PasswordResetRequestOut,
+    summary="Solicitar código de recuperación",
+)
+async def forgot_password(
+    data: PasswordResetRequest,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await password_service.request_password_reset(pool, data.correo)
+
+
+@router.post(
+    "/reset-password",
+    response_model=UserOut,
+    summary="Establecer nueva contraseña con el código recibido",
+)
+async def reset_password(
+    data: PasswordResetConfirm,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await password_service.confirm_password_reset(
+        pool,
+        data.correo,
+        data.codigo,
+        data.nueva_password,
+    )

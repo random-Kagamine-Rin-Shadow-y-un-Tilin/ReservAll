@@ -21,7 +21,8 @@ class ReservaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final esPendiente = reserva.estado == EstadoReserva.pendiente;
+    final esPendiente = reserva.estado == EstadoReserva.pendiente &&
+        (onConfirmar != null || onRechazar != null);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

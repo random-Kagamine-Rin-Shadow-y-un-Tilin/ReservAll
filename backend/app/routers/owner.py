@@ -35,6 +35,8 @@ async def list_reservations(
     search: Optional[str] = Query(
         None, max_length=100, description="Nombre o correo del cliente"
     ),
+    limit: int = Query(50, ge=1, le=200, description="Resultados por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento"),
     current_user: dict = Depends(get_current_user),
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
@@ -47,6 +49,8 @@ async def list_reservations(
         estado=estado.value if estado else None,
         profesional_id=profesional_id,
         search=search,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -63,6 +67,8 @@ async def list_reservation_history(
     search: Optional[str] = Query(
         None, max_length=100, description="Nombre o correo del cliente"
     ),
+    limit: int = Query(50, ge=1, le=200, description="Resultados por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento"),
     current_user: dict = Depends(get_current_user),
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
@@ -75,6 +81,8 @@ async def list_reservation_history(
         estado=estado.value if estado else None,
         profesional_id=profesional_id,
         search=search,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -193,11 +201,18 @@ async def list_clients(
     search: Optional[str] = Query(
         None, max_length=100, description="Nombre o correo del cliente"
     ),
+    limit: int = Query(50, ge=1, le=200, description="Resultados por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento"),
     current_user: dict = Depends(get_current_user),
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
     return await owner_service.list_clients(
-        pool, shop_id, int(current_user["sub"]), search=search
+        pool,
+        shop_id,
+        int(current_user["sub"]),
+        search=search,
+        limit=limit,
+        offset=offset,
     )
 
 

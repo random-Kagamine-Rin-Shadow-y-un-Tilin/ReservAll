@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../config/app_colors.dart';
+import '../../config/app_navigator.dart';
 import '../../controllers/auth_controller.dart';
 import '../../controllers/shop_controller.dart';
+import '../auth/edit_profile_screen.dart';
 import '../auth/login_screen.dart';
+import '../categorias/categories_screen.dart';
+import '../reservas/reservas_list_screen.dart';
 import '../shop/register_shop_screen.dart';
 import '../shop/shop_detail_screen.dart';
 
@@ -18,26 +23,17 @@ class NavigationController extends ChangeNotifier {
   }
 }
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  final NavigationController _navController = NavigationController();
-
-  @override
-  void dispose() {
-    _navController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    // El provider es el único dueño del controlador y se encarga de
+    // dispose() al desmontar la ruta. Crearlo en el State y disponerlo
+    // también a mano provocaba "used after being disposed" al cerrar sesión,
+    // cuando el pushReplacement desmonta HomeScreen.
     return ChangeNotifierProvider(
-      create: (context) => _navController,
+      create: (_) => NavigationController(),
       child: const HomeScreenContent(),
     );
   }
@@ -105,12 +101,9 @@ class HomeTab extends StatelessWidget {
             icon: const Icon(Icons.exit_to_app),
             onPressed: () async {
               await authController.logout();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              }
+              appNavigatorKey.currentState?.pushReplacement(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
             },
             tooltip: 'Cerrar sesión',
           ),
@@ -300,6 +293,7 @@ class HomeTab extends StatelessWidget {
                           builder: (_) => const RegisterShopScreen(),
                         ),
                       ).then((_) {
+                        if (!context.mounted) return;
                         context.read<ShopController>().getMyShops();
                       });
                     },
@@ -394,6 +388,7 @@ class HomeTab extends StatelessWidget {
                   context,
                   MaterialPageRoute(builder: (_) => const RegisterShopScreen()),
                 ).then((_) {
+                  if (!context.mounted) return;
                   context.read<ShopController>().getMyShops();
                 });
               },
@@ -746,6 +741,52 @@ class ReservationsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shopController = context.watch<ShopController>();
+    final shops = shopController.myShops;
+
+    if (shopController.isLoading && shops.isEmpty) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (shops.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Reservas'),
+          backgroundColor: Theme.of(context).primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 2,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.event_available, size: 80, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text(
+                'Aún no tienes negocios',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Registra un negocio para ver sus reservas',
+                style: TextStyle(color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (shops.length == 1) {
+      return ReservasListScreen(negocioId: shops.first.id!);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reservas'),
@@ -753,27 +794,38 @@ class ReservationsTab extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 2,
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.event_available, size: 80, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              'Módulo de Reservas',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade600,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Elige un negocio',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...shops.map(
+            (shop) => Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.store,
+                  color: AppColors.primary,
+                ),
+                title: Text(shop.nombre),
+                subtitle: Text(shop.descripcion, maxLines: 1),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ReservasListScreen(negocioId: shop.id!),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Próximamente disponible',
-              style: TextStyle(color: Colors.grey.shade500),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -913,7 +965,48 @@ class ProfileTab extends StatelessWidget {
               ),
             ),
 
+            // HU_14: la administración de categorías solo existe para admin.
+            if (user?.rol == 'admin') ...[
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CategoriesScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.category),
+                  label: const Text('Administrar categorías'),
+                ),
+              ),
+            ],
+
             const SizedBox(height: 24),
+
+            // HU_05: acceso a la edición del perfil
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const EditProfileScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.edit),
+                label: const Text('Editar perfil'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             // Botón cerrar sesión
             SizedBox(
@@ -921,12 +1014,9 @@ class ProfileTab extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () async {
                   await authController.logout();
-                  if (context.mounted) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    );
-                  }
+                  appNavigatorKey.currentState?.pushReplacement(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  );
                 },
                 icon: const Icon(Icons.exit_to_app, color: Colors.red),
                 label: const Text(

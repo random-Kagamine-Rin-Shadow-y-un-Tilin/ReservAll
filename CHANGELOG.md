@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/random-Kagamine-Rin-Shadow-y-un-Tilin/ReservAll/compare/v1.0.0...v1.0.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **backend:** reparar migracion de horarios y tolerar BD sin descanso_duracion_min ([8281a52](https://github.com/random-Kagamine-Rin-Shadow-y-un-Tilin/ReservAll/commit/8281a529779c93e1d1e67bbf8ce5a51e0faa6ca3))
+
 # 1.0.0 (2026-11-27)
 
 

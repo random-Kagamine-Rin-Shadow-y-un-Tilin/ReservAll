@@ -1,17 +1,27 @@
-# srln_cliente
+# movil-cliente
 
-A new Flutter project.
+App Flutter del cliente. Está configurada contra el backend desplegado en
+`https://reservall.onrender.com/api/v1`.
 
-## Getting Started
+## Ejecutar
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+La URL y la API key se pueden sobrescribir al compilar:
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```powershell
+flutter run --dart-define=API_URL=http://192.168.1.10:8000 --dart-define=API_KEY=tu_clave
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Los valores por defecto están en `lib/services/api_service.dart`
+(`serverUrl`, `baseUrl` y `apiKey`). La autenticación usa la cookie de sesión
+`SNRL_access_token`, guardada en `SharedPreferences` tras el login.
+
+## Notificaciones
+
+Los avisos push se implementan en la PWA (`web-negocio`) y en la app de negocio
+(`movil-negocio`). Esta app del cliente solo consume la API; no tiene SDK de
+notificaciones instalado.

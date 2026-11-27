@@ -1,9 +1,10 @@
 name: Release
 
-# Se ejecuta al crear un tag tipo v1.0.0 (git tag v1.0.0 && git push origin v1.0.0)
+# Se ejecuta cuando semantic-release publica un GitHub Release. También se
+# puede disparar a mano para generar los artefactos sin publicar versión.
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +31,14 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build apk --release
+      - name: Compilar APK contra el backend desplegado
+        run: |
+          EXTRA=""
+          if [ -n "$API_KEY" ]; then EXTRA="--dart-define=API_KEY=$API_KEY"; fi
+          flutter build apk --release --dart-define=API_URL="$API_URL" $EXTRA
+        env:
+          API_URL: ${{ vars.API_URL || 'https://reservall.onrender.com' }}
+          API_KEY: ${{ secrets.API_KEY }}
       - name: Renombrar APK
         run: mv build/app/outputs/flutter-apk/app-release.apk ../${{ matrix.app }}.apk
       - uses: actions/upload-artifact@v4
@@ -56,6 +64,9 @@ jobs:
           cache-dependency-path: web-negocio/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://reservall.onrender.com/api/v1' }}
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
       - run: cd dist && zip -r ../../web-negocio-dist.zip .
       - uses: actions/upload-artifact@v4
         with:
@@ -64,18 +75,21 @@ jobs:
 
   publish:
     needs: [build-apk, build-web]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - name: Crear GitHub Release
+      - name: Adjuntar artefactos al Release creado por semantic-release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name }}
           files: dist/*
-          generate_release_notes: true
+          generate_release_notes: false
 
   notify-slack:
     needs: [build-apk, build-web, publish]
@@ -91,4 +105,4 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: "${{ needs.publish.result == 'success' && ':rocket: Release publicado' || ':warning: Release con problemas' }}: *${{ github.ref_name }}* de ${{ github.repository }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver ejecución>"
+            text: "${{ contains(needs.*.result, 'failure') && ':warning: Release con problemas' || ':rocket: Artefactos listos' }}: *${{ github.event.release.tag_name || github.ref_name }}* de ${{ github.repository }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Ver ejecución>"

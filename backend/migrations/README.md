@@ -44,7 +44,7 @@ Variables nuevas usadas por el backend:
 |---|---|---|
 | `CORS_ORIGINS` | `http://localhost:5173` | Orígenes permitidos, separados por coma |
 | `COOKIE_SECURE` | `false` | Poner `true` en HTTPS/producción |
-| `COOKIE_SAMESITE` | `lax` | Política SameSite de las cookies |
+| `COOKIE_SAMESITE` | `lax` | Política SameSite de las cookies (`none` si web y backend están en dominios distintos) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_FROM` | — | Envío del código de HU_03 |
 | `SMTP_USER` / `SMTP_PASSWORD` | — | Credenciales SMTP (opcional) |
 | `SMTP_USE_TLS` | `true` | STARTTLS |
@@ -55,6 +55,24 @@ Variables nuevas usadas por el backend:
 | `VAPID_SUBJECT` | `mailto:soporte@reservall.local` | Contacto incluido en la firma VAPID |
 | `PUSH_LEAD_MINUTES` | `0` | Minutos de antelación del aviso (`0` = a la hora de la reserva) |
 | `PUSH_CHECK_INTERVAL_SECONDS` | `30` | Frecuencia con la que se revisan reservas próximas |
+
+### Producción (Render + Vercel)
+
+Con el backend en `https://reservall.onrender.com` y la web en
+`https://reservall.vercel.app`, configurar en Render:
+
+```text
+CORS_ORIGINS=https://reservall.vercel.app
+COOKIE_SECURE=true
+COOKIE_SAMESITE=none
+PUSH_ENABLED=true
+PUSH_LEAD_MINUTES=0
+PUSH_CHECK_INTERVAL_SECONDS=30
+```
+
+Sin `COOKIE_SAMESITE=none`, el navegador no envía la cookie de sesión desde
+`reservall.vercel.app` a `reservall.onrender.com` (sitios distintos). Las claves
+VAPID deben estar en Render; la pública se sirve en `/api/v1/push/public-key`.
 
 ### Notificaciones push
 

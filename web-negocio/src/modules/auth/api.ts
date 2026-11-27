@@ -1,4 +1,5 @@
 import { fetchWithAuth } from "../../lib/api";
+import { API_URL } from "../../lib/config";
 import { clearHttpCache } from "../../lib/offlineCache";
 import { jsonRequest } from "../../lib/request";
 import type {
@@ -10,7 +11,6 @@ import type {
   LoginPayLoad,
 } from "./types";
 
-const API_URL = import.meta.env.VITE_API_URL
 const USER_CACHE_KEY = "reservall:current-user:v1"
 
 function cacheUser(user: User): void {

@@ -1,6 +1,5 @@
 import { fetchWithAuth } from "./api";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from "./config";
 
 function errorMessage(detail: unknown, fallback: string): string {
   if (typeof detail === "string") return detail;

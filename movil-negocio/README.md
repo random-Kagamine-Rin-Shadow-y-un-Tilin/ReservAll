@@ -1,7 +1,8 @@
 # srln_negocio_app
 
-App Flutter de negocio. Por defecto apunta al **backend local** en
-`http://localhost:8000/api/v1`.
+App Flutter de negocio. Por defecto apunta al **backend desplegado** en
+`https://reservall.onrender.com/api/v1`. Para desarrollar contra un backend
+local, usa `--dart-define=API_URL=...` (ver abajo).
 
 ## 1. Backend local
 
@@ -66,12 +67,31 @@ flutter run --dart-define=API_URL=http://192.168.1.10:8000 --dart-define=API_KEY
 
 Los valores están en `lib/config/app_config.dart`:
 
-| Variable (`--dart-define`) | Valor por defecto        |
-| -------------------------- | ------------------------ |
-| `API_URL`                  | `http://localhost:8000`  |
-| `API_KEY`                  | clave del proyecto       |
+| Variable (`--dart-define`) | Valor por defecto                    |
+| -------------------------- | ------------------------------------ |
+| `API_URL`                  | `https://reservall.onrender.com`     |
+| `API_KEY`                  | clave del proyecto                   |
 
 La URL final es `$API_URL/api/v1`.
+
+Ejemplo con backend local en la IP de la PC:
+
+```powershell
+flutter run --dart-define=API_URL=http://192.168.1.10:8000
+```
+
+## Avisos de reservas
+
+La app programa un aviso local en el dispositivo para cada reserva próxima
+(pendiente o confirmada) que se carga en el resumen del inicio. El aviso se
+muestra a la hora de inicio aunque la app esté cerrada, siempre que el sistema
+permita alarmas exactas. No se usa Firebase/FCM: estos avisos se programan desde
+el propio teléfono, por lo que requieren que la app haya consultado la agenda al
+menos una vez y que la hora del dispositivo sea correcta. Android 12+ puede
+denegar alarmas exactas; en ese caso se usa una alarma aproximada.
+
+Se solicita permiso de notificaciones al iniciar y se cancelan los avisos al
+cerrar sesión.
 
 ## Solución de problemas
 

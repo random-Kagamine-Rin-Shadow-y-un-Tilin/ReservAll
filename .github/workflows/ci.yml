@@ -88,6 +88,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://reservall.onrender.com/api/v1' }}
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
       - name: Guardar build
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         uses: actions/upload-artifact@v4

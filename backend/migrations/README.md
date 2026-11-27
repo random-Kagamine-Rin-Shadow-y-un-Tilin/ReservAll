@@ -15,6 +15,25 @@ psql "$DATABASE_URL" -f migrations/007_push_notifications.sql
 Todas son idempotentes. La `006` se omite si existen nombres de categoría
 duplicados; en ese caso hay que limpiar los datos y volver a ejecutarla.
 
+Si al guardar horarios aparece
+`column "descanso_duracion_min" of relation "horarios" does not exist`, la base
+no tiene aplicada la `005`. Verificar y volver a ejecutarla:
+
+```sql
+SELECT column_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'horarios'
+  AND column_name = 'descanso_duracion_min';
+```
+
+La `005` también elimina el índice único antiguo de `(negocio_id, dia)` para
+permitir varios turnos por día. Fue corregida para comparar los nombres de las
+columnas como `text` (necesario en PostgreSQL/Supabase). El repositorio de
+horarios tolera una base sin migrar: devuelve `60` como duración por defecto e
+ignora el campo al escribir, pero **la migración debe aplicarse** para guardar
+duraciones personalizadas.
+
 ## Cuenta administradora (HU_14)
 
 El registro público (`POST /api/v1/auth/register`) solo permite `cliente` y

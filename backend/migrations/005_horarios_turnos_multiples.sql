@@ -15,7 +15,7 @@ BEGIN
      WHERE con.conrelid = 'public.horarios'::regclass
        AND con.contype = 'u'
        AND ARRAY(
-             SELECT att.attname
+             SELECT att.attname::text
                FROM unnest(con.conkey) AS key_attnum
                JOIN pg_attribute AS att
                  ON att.attrelid = con.conrelid

@@ -1,7 +1,7 @@
 {
   "name": "reservall-release",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Herramientas de release para el monorepo ReservAll",
   "scripts": {
     "release": "semantic-release",

@@ -2,9 +2,18 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '/models/shop.dart';
 
-const String serverUrl = "http://10.0.0.6:8000";
+/// Backend desplegado. Se puede sobrescribir al compilar con:
+///   flutter run --dart-define=API_URL=http://192.168.1.10:8000
+const String serverUrl = String.fromEnvironment(
+  "API_URL",
+  defaultValue: "https://reservall.onrender.com",
+);
 const String baseUrl = "$serverUrl/api/v1";
-const String apiKey = "25c78a3206e58231c87783cdbc8359584767c6718f1fcaedb9a406c5a6971e4c";
+const String apiKey = String.fromEnvironment(
+  "API_KEY",
+  defaultValue:
+      "25c78a3206e58231c87783cdbc8359584767c6718f1fcaedb9a406c5a6971e4c",
+);
 
 /// Convierte el valor de imagen que entrega el backend en una URL usable.
 /// Acepta URLs absolutas, rutas absolutas (`/...`) y nombres de archivo.

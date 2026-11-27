@@ -1,6 +1,7 @@
 import '../models/auth_model.dart';
 import '../models/user_model.dart';
 import 'api_service.dart';
+import 'notification_service.dart';
 
 class AuthService {
   final ApiService _apiService = ApiService();
@@ -137,6 +138,11 @@ class AuthService {
       // Ignorar errores
     } finally {
       await _apiService.clearCookies();
+      // Los avisos programados son del usuario que sale: se retiran para no
+      // mezclar reservas de otra cuenta en el mismo dispositivo.
+      try {
+        await NotificationService.instance.cancelarTodos();
+      } catch (_) {}
     }
   }
 

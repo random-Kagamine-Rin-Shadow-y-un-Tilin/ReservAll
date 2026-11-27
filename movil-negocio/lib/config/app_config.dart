@@ -1,17 +1,13 @@
 class AppConfig {
   /// URL del backend.
   ///
-  /// Por defecto usa `http://localhost:8000`, que funciona con el celular
-  /// conectado por USB después de ejecutar:
-  ///
-  ///   adb reverse tcp:8000 tcp:8000
-  ///
-  /// También se puede usar la IP de la PC en la misma red:
+  /// Por defecto apunta al backend desplegado en Render. Para desarrollar
+  /// contra un backend local se puede sobrescribir:
   ///
   ///   flutter run --dart-define=API_URL=http://192.168.1.10:8000
   static const String apiUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://localhost:8000',
+    defaultValue: 'https://reservall.onrender.com',
   );
 
   static const String apiKey = String.fromEnvironment(

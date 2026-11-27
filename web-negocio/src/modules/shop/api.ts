@@ -1,11 +1,10 @@
 import { fetchWithAuth } from "../../lib/api";
+import { API_URL } from "../../lib/config";
 import type { 
     ShopGeneralInfo, RegisterShopPayload, EditShopPayload, ShopContactInfo, 
     ShopContactRegister, ShopFullProfileOut, ShopScheduleRegister, ShopSheduleInfo, 
     ShopAddressInfo, ShopAddressRegister, ShopAddressUpdate,
 } from "./types";
-
-const API_URL = import.meta.env.VITE_API_URL
 
 async function getApiError(res: Response, fallback: string): Promise<string> {
     try {

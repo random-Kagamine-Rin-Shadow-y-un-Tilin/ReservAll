@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/reserva_model.dart';
+import '../services/notification_service.dart';
 import '../services/reserva_service.dart';
 
 class ReservaController extends ChangeNotifier {
@@ -244,6 +247,11 @@ class ReservaController extends ChangeNotifier {
     }
     _isLoadingProximas = false;
     notifyListeners();
+
+    // Al cargar la agenda se (re)programan los avisos en el dispositivo.
+    // Se usa la lista completa (no el recorte del resumen) para no perder
+    // avisos de reservas que no caben en las primeras 4 tarjetas.
+    unawaited(NotificationService.instance.sincronizar(resultados));
   }
 
   // ================= DETALLE =================

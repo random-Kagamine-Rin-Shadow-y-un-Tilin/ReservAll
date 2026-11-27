@@ -1,0 +1,27 @@
+[build]
+  command = "pnpm build"
+  publish = "dist"
+
+# El service worker debe poder controlar todo el origen y no quedar cacheado.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# React Router: las rutas sirven index.html; los archivos estáticos van primero.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

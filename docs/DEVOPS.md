@@ -74,6 +74,29 @@ Ideas de escenarios que no cubren Actions ni la app de Slack:
 - **Recordatorio de PRs sin revisar**: cada mañana, PRs abiertos > 24 h → Slack mención al revisor.
 - **Bitácora**: Release publicado (webhook GitHub) → Google Sheets / Notion.
 
+## 5. Variables de despliegue
+
+El backend está en Render (`https://reservall.onrender.com`), la web en Vercel
+(`https://reservall.vercel.app`) y la API key es común a todos los frentes.
+
+En GitHub (Settings → Secrets and variables → Actions), configurar:
+
+| Tipo | Nombre | Valor |
+|---|---|---|
+| Variable | `VITE_API_URL` | `https://reservall.onrender.com/api/v1` |
+| Variable | `API_URL` | `https://reservall.onrender.com` (Flutter) |
+| Secreto | `VITE_API_KEY` | API key del backend (build web) |
+| Secreto | `API_KEY` | API key del backend (APK) |
+
+Si no se crean las variables, los workflows usan la URL de Render por defecto.
+Si `API_KEY` no está definido, el APK conserva la clave por defecto del código.
+
+En Render, además de `DATABASE_URL`, `JWT_SECRET`, `API_KEY` y Supabase, hay que
+configurar `CORS_ORIGINS=https://reservall.vercel.app`, `COOKIE_SECURE=true`,
+`COOKIE_SAMESITE=none`, `PUSH_ENABLED=true`, `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, `PUSH_LEAD_MINUTES=0` y `PUSH_CHECK_INTERVAL_SECONDS=30`.
+En Vercel/Netlify, solo `VITE_API_URL` y `VITE_API_KEY`.
+
 ## Pendientes detectados
 
 - En `main`, `web-negocio` no compila (variables sin usar, TS6133, y el import `EditShopPayloal` en `src/modules/shop/api.ts`). En `develop` ya compila.

@@ -1,6 +1,5 @@
 import { fetchWithAuth } from "../../lib/api";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { API_URL } from "../../lib/config";
 
 export interface GeocodedAddress {
   direccion_calle: string;

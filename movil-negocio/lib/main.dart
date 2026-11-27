@@ -21,9 +21,19 @@ import 'services/agenda_service.dart';
 import 'services/client_service.dart';
 import 'services/report_service.dart';
 import 'services/location_service.dart';
+import 'services/notification_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   ApiService().init();
+
+  // Los avisos se reprograman cada vez que se cargan las próximas reservas.
+  // Si falla la inicialización (permisos, dispositivo sin soporte), la app
+  // sigue funcionando con normalidad.
+  try {
+    await NotificationService.instance.init();
+  } catch (_) {}
+
   runApp(const MyApp());
 }
 

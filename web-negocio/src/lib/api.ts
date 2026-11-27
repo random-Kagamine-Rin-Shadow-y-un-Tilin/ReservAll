@@ -1,11 +1,9 @@
+import { API_KEY, API_URL } from "./config";
 import {
   cachedResponseToResponse,
   readCachedResponse,
   writeCachedResponse,
 } from "./offlineCache";
-
-const API_URL = import.meta.env.VITE_API_URL;
-const API_KEY = import.meta.env.VITE_API_KEY;
 
 function isCacheable(url: string, options: RequestInit): boolean {
   const method = (options.method ?? "GET").toUpperCase();

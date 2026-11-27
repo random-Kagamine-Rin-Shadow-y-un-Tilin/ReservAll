@@ -1,4 +1,5 @@
 import { fetchWithAuth } from "../../lib/api";
+import { API_URL } from "../../lib/config";
 import type { ShopContactInfo, ShopGeneralInfo } from "../shop/types";
 import type {
   ApiMessage,
@@ -12,8 +13,6 @@ import type {
   ServiceEditPayload,
   ServicePayload,
 } from "./types";
-
-const API_URL = import.meta.env.VITE_API_URL;
 
 function errorMessage(detail: unknown, fallback: string): string {
   if (typeof detail === "string") return detail;

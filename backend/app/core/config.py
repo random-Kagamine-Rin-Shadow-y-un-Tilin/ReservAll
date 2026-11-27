@@ -32,6 +32,19 @@ class Settings(BaseSettings):
     password_reset_code_ttl_minutes: int = 15
     # Solo para desarrollo/local: devuelve el código en la respuesta.
     password_reset_return_code: bool = False
+    # Notificaciones push de reservas (Web Push / VAPID).
+    push_enabled: bool = True
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:soporte@reservall.local"
+    # Minutos de antelación con los que se avisa de una reserva (0 = a su hora).
+    push_lead_minutes: int = 0
+    # Cada cuántos segundos se revisan las reservas próximas.
+    push_check_interval_seconds: int = 30
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)
 
     @property
     def cors_origins_list(self) -> list[str]:

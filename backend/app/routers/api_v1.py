@@ -8,6 +8,7 @@ from app.routers import (
     owner,
     profesional,
     profile,
+    push,
     service,
     shop,
 )
@@ -23,3 +24,4 @@ api_v1_router.include_router(service.router)
 api_v1_router.include_router(owner.router)
 api_v1_router.include_router(agenda.router)
 api_v1_router.include_router(location.router)
+api_v1_router.include_router(push.router)

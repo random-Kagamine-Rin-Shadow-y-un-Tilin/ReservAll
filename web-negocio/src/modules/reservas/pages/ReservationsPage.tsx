@@ -36,6 +36,7 @@ import type {
   ReservationStatus,
   ReservationSummary,
 } from "../types";
+import { useReservationReminders } from "../hooks/useReservationReminders";
 import { useShop } from "../../shop/hooks/useShop";
 import { Badge } from "../../../shared/components/ui/Badge";
 import { Button } from "../../../shared/components/ui/Button";
@@ -180,6 +181,8 @@ export function ReservationsPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useReservationReminders(reservations);
 
   useEffect(() => {
     if (!selectedShopId) return;

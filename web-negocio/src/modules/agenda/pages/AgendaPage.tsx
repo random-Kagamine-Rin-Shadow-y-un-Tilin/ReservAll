@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LuBan,
@@ -23,6 +23,7 @@ import type {
   AgendaSummary,
 } from "../types";
 import { statusMeta } from "../../reservas/constants";
+import { useReservationReminders } from "../../reservas/hooks/useReservationReminders";
 import { useShop } from "../../shop/hooks/useShop";
 import { Badge } from "../../../shared/components/ui/Badge";
 import { Button } from "../../../shared/components/ui/Button";
@@ -86,6 +87,12 @@ export function AgendaPage() {
   const [blockToDelete, setBlockToDelete] = useState<AgendaBlock | null>(null);
   const [deletingBlock, setDeletingBlock] = useState(false);
   const [deleteBlockError, setDeleteBlockError] = useState<string | null>(null);
+
+  const agendaReservations = useMemo(
+    () => agenda?.dias.flatMap((day) => day.reservas) ?? [],
+    [agenda],
+  );
+  useReservationReminders(agendaReservations);
 
   useEffect(() => {
     if (!selectedShopId) return;

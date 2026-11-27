@@ -1,15 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  LuBell,
+  LuBellOff,
+  LuBellRing,
+  LuCheck,
+  LuDownload,
   LuLogOut,
   LuMail,
   LuPencil,
+  LuSmartphone,
   LuStore,
   LuUser,
 } from "react-icons/lu";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { useShop } from "../../shop/hooks/useShop";
 import { ProfileEditModal } from "../../auth/components/ProfileEditModal";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushStatus,
+  sendTestPush,
+  type PushStatus,
+} from "../../../lib/push";
+import { useInstallPrompt } from "../../../shared/hooks/useInstallPrompt";
 import { Badge } from "../../../shared/components/ui/Badge";
 import { Button } from "../../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../../shared/components/ui/Card";
@@ -22,9 +36,77 @@ export function AccountPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const [pushStatus, setPushStatus] = useState<PushStatus>("available");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const { canInstall, installed, install } = useInstallPrompt();
+
+  useEffect(() => {
+    void getPushStatus().then(setPushStatus);
+  }, []);
+
   async function handleLogout() {
     await logout();
     navigate("/login", { replace: true });
+  }
+
+  async function handleEnablePush() {
+    setPushBusy(true);
+    setPushMessage(null);
+    try {
+      const status = await enablePushNotifications();
+      setPushStatus(status);
+      setPushMessage(
+        status === "subscribed"
+          ? "Notificaciones activadas. Te avisaremos cuando empiece una reserva."
+          : status === "denied"
+            ? "El navegador bloqueó las notificaciones. Actívalas desde los ajustes del sitio."
+            : "No se pudo activar las notificaciones en este navegador.",
+      );
+    } catch (error) {
+      setPushMessage(
+        error instanceof Error
+          ? error.message
+          : "No pudimos activar las notificaciones push.",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleDisablePush() {
+    setPushBusy(true);
+    setPushMessage(null);
+    try {
+      const status = await disablePushNotifications();
+      setPushStatus(status);
+      setPushMessage("Notificaciones desactivadas en este dispositivo.");
+    } catch (error) {
+      setPushMessage(
+        error instanceof Error
+          ? error.message
+          : "No pudimos desactivar las notificaciones.",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleTestPush() {
+    setPushBusy(true);
+    setPushMessage(null);
+    try {
+      await sendTestPush();
+      setPushMessage("Notificación de prueba enviada. Revisa tu bandeja del sistema.");
+    } catch (error) {
+      setPushMessage(
+        error instanceof Error
+          ? error.message
+          : "No pudimos enviar la notificación de prueba.",
+      );
+    } finally {
+      setPushBusy(false);
+    }
   }
 
   return (
@@ -165,6 +247,153 @@ export function AccountPage() {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader
+          title="Notificaciones y app"
+          subtitle="Instala ReservAll y recibe avisos cuando empiece una reserva"
+          icon={<LuBell />}
+        />
+        <div className="grid gap-4 p-5 lg:grid-cols-2">
+          <div className="rounded-2xl border border-border/70 bg-surface/60 p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-tint text-primary">
+                <LuSmartphone size={18} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold text-foreground">
+                    App en tu dispositivo
+                  </p>
+                  {installed && (
+                    <Badge tone="success" dot>
+                      Instalada
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-secondary-text">
+                  La agenda y las reservas quedan guardadas para consultarlas
+                  sin internet.
+                </p>
+
+                <div className="mt-3">
+                  {installed ? (
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-success">
+                      <LuCheck size={14} />
+                      Ya puedes abrir ReservAll como una app.
+                    </p>
+                  ) : canInstall ? (
+                    <Button
+                      size="sm"
+                      leftIcon={<LuDownload size={15} />}
+                      onClick={() => void install()}
+                    >
+                      Instalar app
+                    </Button>
+                  ) : (
+                    <p className="text-[11px] leading-relaxed text-secondary-text">
+                      En Chrome o Edge usa el menú del navegador y elige
+                      «Instalar aplicación». En iPhone: Compartir → Añadir a
+                      pantalla de inicio.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border/70 bg-surface/60 p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary-tint text-secondary">
+                {pushStatus === "subscribed" ? (
+                  <LuBellRing size={18} />
+                ) : (
+                  <LuBellOff size={18} />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold text-foreground">
+                    Avisos de reservas
+                  </p>
+                  <Badge
+                    tone={pushStatus === "subscribed" ? "success" : "neutral"}
+                    dot
+                  >
+                    {pushStatus === "subscribed"
+                      ? "Activadas"
+                      : pushStatus === "denied"
+                        ? "Bloqueadas"
+                        : pushStatus === "unsupported"
+                          ? "No disponibles"
+                          : "Desactivadas"}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-secondary-text">
+                  Recibe una notificación push cuando llegue la hora de una
+                  reserva, incluso con la app cerrada.
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {pushStatus === "subscribed" ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        leftIcon={<LuBellRing size={15} />}
+                        loading={pushBusy}
+                        onClick={handleTestPush}
+                      >
+                        Probar aviso
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        loading={pushBusy}
+                        onClick={handleDisablePush}
+                      >
+                        Desactivar
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      leftIcon={<LuBell size={15} />}
+                      loading={pushBusy}
+                      disabled={
+                        pushStatus === "unsupported" || pushStatus === "denied"
+                      }
+                      onClick={handleEnablePush}
+                    >
+                      Activar notificaciones
+                    </Button>
+                  )}
+                </div>
+
+                {pushStatus === "unsupported" && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-secondary-text">
+                    Este navegador no soporta notificaciones push. En iPhone,
+                    instala primero la app desde Compartir.
+                  </p>
+                )}
+
+                {pushStatus === "denied" && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-secondary-text">
+                    Permite las notificaciones desde los ajustes del sitio en
+                    tu navegador y vuelve a intentarlo.
+                  </p>
+                )}
+
+                {pushMessage && (
+                  <p className="mt-2 rounded-lg bg-card px-3 py-2 text-[11px] font-medium text-secondary-text">
+                    {pushMessage}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {user && (
         <ProfileEditModal

@@ -13,6 +13,7 @@ import {
     getCurrentUser,
     updateProfile,
 } from "../api";
+import { detachPushSubscriptionFromServer } from "../../../lib/push";
 
 interface AuthContextType{
     user: User | null
@@ -47,6 +48,9 @@ export function AuthProvider({children}: {children: ReactNode}){
     }
 
     async function logout() {
+        // Se desvincula el dispositivo de la cuenta antes de borrar la sesión
+        // para que no siga recibiendo avisos de esta cuenta.
+        await detachPushSubscriptionFromServer()
         await logOut()
         setUser(null)
     }

@@ -22,7 +22,18 @@ export async function apiRequest<T>(
   options: RequestInit = {},
   fallbackError = "Ocurrió un error inesperado.",
 ): Promise<T> {
-  const res = await fetchWithAuth(`${API_URL}${path}`, options);
+  let res: Response;
+
+  try {
+    res = await fetchWithAuth(`${API_URL}${path}`, options);
+  } catch {
+    throw new Error(
+      typeof navigator !== "undefined" && navigator.onLine === false
+        ? "Sin conexión. No hay datos guardados para esta sección todavía."
+        : "No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
+    );
+  }
+
   const raw = await res.text();
   let data: unknown = null;
 

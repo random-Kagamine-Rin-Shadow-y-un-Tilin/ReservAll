@@ -50,6 +50,19 @@ class ReservaController extends ChangeNotifier {
   static const _pageSize = 20;
   bool get hasMore => _items.length < _total;
 
+  // ---- Próximas reservas (resumen del inicio) ----
+  List<ReservaProxima> _proximas = [];
+  List<ReservaProxima> get proximas => _proximas;
+
+  bool _isLoadingProximas = false;
+  bool get isLoadingProximas => _isLoadingProximas;
+
+  String? _errorProximas;
+  String? get errorProximas => _errorProximas;
+
+  // Identifica la última carga para descartar respuestas obsoletas.
+  int _proximasRequestId = 0;
+
   // ---- Detalle ----
   ReservaDetalle? _detalle;
   ReservaDetalle? get detalle => _detalle;
@@ -151,6 +164,85 @@ class ReservaController extends ChangeNotifier {
     } catch (e) {
       _errorMessage = _msg(e);
     }
+    notifyListeners();
+  }
+
+  // ================= PRÓXIMAS (RESUMEN DEL INICIO) =================
+
+  /// Carga las próximas reservas pendientes o confirmadas de los negocios
+  /// indicados (`id` -> nombre), combinándolas en una sola lista ordenada.
+  ///
+  /// Este estado es independiente del listado de la pantalla de Reservas para
+  /// que los filtros de esa pantalla no afecten al resumen del inicio.
+  Future<void> cargarProximas(
+    Map<int, String> negocios, {
+    int limite = 4,
+  }) async {
+    final requestId = ++_proximasRequestId;
+
+    if (negocios.isEmpty) {
+      _proximas = [];
+      _errorProximas = null;
+      _isLoadingProximas = false;
+      notifyListeners();
+      return;
+    }
+
+    _isLoadingProximas = true;
+    _errorProximas = null;
+    notifyListeners();
+
+    final ahora = DateTime.now();
+    final desde = DateTime(ahora.year, ahora.month, ahora.day);
+    final hasta = desde.add(const Duration(days: 7));
+
+    Object? ultimoError;
+
+    final cargas = await Future.wait(
+      negocios.entries.map((entry) async {
+        try {
+          final res = await _service.listarPorNegocio(
+            negocioId: entry.key,
+            fechaDesde: desde,
+            fechaHasta: hasta,
+            limit: 100,
+          );
+          return res.items
+              .where(
+                (r) =>
+                    r.estado == EstadoReserva.pendiente ||
+                    r.estado == EstadoReserva.confirmada,
+              )
+              .map(
+                (r) => ReservaProxima(
+                  reserva: r,
+                  negocioId: entry.key,
+                  negocioNombre: entry.value,
+                ),
+              )
+              .toList();
+        } catch (e) {
+          ultimoError = e;
+          return <ReservaProxima>[];
+        }
+      }),
+    );
+
+    // Otra carga más reciente ya tomó el control.
+    if (requestId != _proximasRequestId) return;
+
+    final resultados = cargas.expand((items) => items).toList()
+      ..sort((a, b) {
+        final porFecha = a.reserva.fecha.compareTo(b.reserva.fecha);
+        if (porFecha != 0) return porFecha;
+        return a.reserva.horaInicio.compareTo(b.reserva.horaInicio);
+      });
+
+    _proximas = resultados.take(limite).toList();
+    if (_proximas.isEmpty && ultimoError != null) {
+      _errorProximas = _msg(ultimoError!);
+    }
+    _isLoadingProximas = false;
     notifyListeners();
   }
 

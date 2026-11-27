@@ -1,7 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "./modules/auth/hooks/useAuth";
+import { syncPushSubscription } from "./lib/push";
 import { ShopProvider } from "./modules/shop/context/ShopContext";
+import { OfflineBanner } from "./shared/components/OfflineBanner";
 import { Sidebar } from "./shared/components/layout/Sidebar";
 import { Topbar } from "./shared/components/layout/Topbar";
 import { Spinner } from "./shared/components/ui/Feedback";
@@ -12,6 +14,10 @@ export function App() {
 
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const openSidebar = useCallback(() => setSidebarOpen(true), []);
+
+  useEffect(() => {
+    if (user) void syncPushSubscription();
+  }, [user]);
 
   if (loading) {
     return (
@@ -32,6 +38,7 @@ export function App() {
         <Sidebar open={sidebarOpen} onClose={closeSidebar} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onMenuClick={openSidebar} />
+          <OfflineBanner />
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
             <div className="mx-auto w-full max-w-7xl">
               <Outlet />

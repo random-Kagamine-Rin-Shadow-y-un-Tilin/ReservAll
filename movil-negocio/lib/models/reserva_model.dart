@@ -91,6 +91,22 @@ class ReservaListItem {
       );
 }
 
+/// Reserva próxima junto con el negocio al que pertenece.
+///
+/// Se usa en el resumen del inicio, donde se combinan las reservas de
+/// todos los negocios del dueño.
+class ReservaProxima {
+  final ReservaListItem reserva;
+  final int negocioId;
+  final String negocioNombre;
+
+  ReservaProxima({
+    required this.reserva,
+    required this.negocioId,
+    required this.negocioNombre,
+  });
+}
+
 class ReservasListResponse {
   final int total;
   final int limit;
